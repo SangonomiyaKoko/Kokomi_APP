@@ -1,0 +1,71 @@
+from api.loggers import ExceptionLogger
+from api.middlewares import RedisClient
+from api.schemas import ACResponse, AuthResponse
+from api.utils import TimeUtils
+from api.network import ExternalAPI
+from api.response import JSONResponse
+
+class TokenAPI:
+    @ExceptionLogger.handle_program_exception_async
+    async def set_ac(ac: ACResponse, region: str, platform: str = None, user_id: str = None):
+        """
+        设置ac
+        """
+        result = await ExternalAPI.varify_ac(region,ac.account_id,ac.access_token)
+        if result['code'] != 1000:
+            return result
+        if result['data'] == False:
+            return JSONResponse.API_2025_InvalidAccessToken
+        redis_key = f"token:ac:{ac.account_id}"
+        if platform:
+            data = {
+                'region': region,
+                'ac': ac.access_token,
+                'platform': platform,
+                'user_id': user_id
+            }
+        else:
+            data = {
+                'region': region,
+                'ac': ac.access_token
+            }
+        result = await RedisClient.set(redis_key,data)
+        return result
+    
+    @ExceptionLogger.handle_program_exception_async
+    async def set_auth_by_link(auth: AuthResponse, region: str, platform: str = None, user_id: str = None):
+        redis_key = f"token:auth:{auth.account_id}"
+        if platform:
+            data = {
+                'region': region,
+                'auth': auth.access_token,
+                'platform': platform,
+                'user_id': user_id
+            }
+        else:
+            data = {
+                'region': region,
+                'auth': auth.access_token
+            }
+        vaildity = auth.expires_at-TimeUtils.timestamp() - 60
+        result = await RedisClient.set(redis_key,data,vaildity)
+        return result
+    
+    @ExceptionLogger.handle_program_exception_async
+    async def del_auth(account_id: int):
+        """
+        删除ac
+        """
+        redis_key = f"token:auth:{account_id}"
+        result = await RedisClient.drop(redis_key)
+        return result
+    
+    @ExceptionLogger.handle_program_exception_async
+    async def del_ac(account_id: int):
+        """
+        删除ac
+        """
+        redis_key = f"token:ac:{account_id}"
+        result = await RedisClient.drop(redis_key)
+        return result
+
