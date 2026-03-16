@@ -1,19 +1,19 @@
-CREATE DATABASE IF NOT EXISTS wows;
+CREATE DATABASE IF NOT EXISTS wows_main_db;
 
-USE wows;
+USE wows_main_db;
 
-/* =========================================================
-   基础字典表
-   ========================================================= */
 
-CREATE TABLE region (
+
+/* 基础字典表 */
+
+CREATE TABLE D_region (
     id           TINYINT UNSIGNED PRIMARY KEY COMMENT '区域ID',
     name         VARCHAR(10)  NOT NULL        COMMENT '区域名称',
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
 ) COMMENT='游戏区域基础数据表';
 
 
-CREATE TABLE platform (
+CREATE TABLE D_platform (
     id           TINYINT UNSIGNED PRIMARY KEY COMMENT '平台ID',
     name         VARCHAR(10)  NOT NULL        COMMENT '平台名称',
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
@@ -21,12 +21,10 @@ CREATE TABLE platform (
 
 
 
-/* =========================================================
-   Clan Battle 赛季信息
-   ========================================================= */
+/* Clan Battle 赛季信息 */
 
 -- 该表仅保存当前赛季信息，理论上始终只有一条数据
-CREATE TABLE clan_battle_season (
+CREATE TABLE T_clan_battle_season (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
 
     season_id       INT       NOT NULL COMMENT '赛季ID',
@@ -38,7 +36,7 @@ CREATE TABLE clan_battle_season (
                     ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
 ) COMMENT='Clan Battle 当前赛季元数据';
 
-CREATE TABLE clan_season_stats (
+CREATE TABLE T_clan_battle_stats (
     id                     INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
 
     region_id              TINYINT UNSIGNED NOT NULL     COMMENT '区域ID',
@@ -65,7 +63,7 @@ CREATE TABLE clan_season_stats (
 
 -- 指定赛季战斗记录（示例：S33）
 -- 当更新 clan_battle_season 时会有相应代码自动创建对应赛季表
-CREATE TABLE clan_battle_s33 (
+CREATE TABLE T_clan_battle_s33 (
     id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
 
     battle_time     TIMESTAMP NOT NULL            COMMENT '战斗结束时间',
@@ -93,11 +91,9 @@ CREATE TABLE clan_battle_s33 (
 
 
 
-/* =========================================================
-   用户绑定系统
-   ========================================================= */
+/* 用户绑定系统 */
 
-CREATE TABLE user_binding (
+CREATE TABLE T_user_binding (
     id                   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '用户ID',
 
     platform_id          TINYINT UNSIGNED NOT NULL     COMMENT '来源平台ID',
@@ -118,7 +114,7 @@ CREATE TABLE user_binding (
         ON DELETE RESTRICT
 ) COMMENT='平台用户绑定主表';
 
-CREATE TABLE user_bind_account (
+CREATE TABLE T_user_bind_account (
     id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '自增主键',
 
     user_id     INT UNSIGNED     NOT NULL COMMENT '对应 user_binding.id',
@@ -138,11 +134,9 @@ CREATE TABLE user_bind_account (
 
 
 
-/* =========================================================
-   API系统相关基础表
-   ========================================================= */
+/* API系统相关基础表 */
 
-CREATE TABLE blacklist (
+CREATE TABLE T_platform_blacklist (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
 
     target_type   TINYINT UNSIGNED NOT NULL   COMMENT '封禁类型 1=IP 2=USER 3=CLAN',
@@ -157,10 +151,10 @@ CREATE TABLE blacklist (
     INDEX idx_expires_at (expires_at)
 ) COMMENT='系统黑名单表';
 
-CREATE TABLE api_token (
+CREATE TABLE T_platform_token (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY COMMENT '主键',
 
-    token         VARCHAR(128) NOT NULL       COMMENT '访问令牌（建议随机生成）',
+    token         VARCHAR(128) NOT NULL       COMMENT '访问令牌',
     permission    VARCHAR(32)  NOT NULL       COMMENT '权限等级 root/user',
 
     extra         VARCHAR(255) DEFAULT NULL   COMMENT '备注信息',
