@@ -7,10 +7,6 @@ __pycache__/
 *.pyc
 
 .env
-docker-compose.yml
 /temp/
-/logs/error/*
-/logs/exception/*
-/logs/metrics/*
-/logs/scripts/*
+docker-compose.yml
 init/mysql/99-test.sql

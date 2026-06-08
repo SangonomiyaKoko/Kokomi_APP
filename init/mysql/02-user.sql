@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS T_user_base (
     register_time    TIMESTAMP    DEFAULT NULL,
 
     created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
 
@@ -27,7 +28,7 @@ CREATE TABLE IF NOT EXISTS T_user_info (
     points           INT          DEFAULT 0,      -- 查询点数
 
     -- 绑定信息
-    binding_id       TINYINT      DEFAULT NULL,   -- 当前绑定的账号 T_user_base.id
+    binding_id       INT          DEFAULT NULL,   -- 当前绑定的账号 T_user_base.id
     binding_ids      VARCHAR(64)  DEFAULT NULL,   -- 绑定账号列表
 
     created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,

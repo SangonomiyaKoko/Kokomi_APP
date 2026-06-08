@@ -1,5 +1,6 @@
-from .bind import BindAPI
+from .bind import BotBindAPI
+from .refresh import UserRefreshAPI
 
 __all__ = [
-    'BindAPI'
+    'BotBindAPI'
 ]

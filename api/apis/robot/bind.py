@@ -5,7 +5,7 @@ from api.models import BotUserModel
 from api.utils import GameUtils
 
 
-class BindAPI:
+class BotBindAPI:
     @staticmethod
     @ExceptionLogger.handle_program_exception_async
     async def getCurrentBind(platform_id: int, user_id: str):

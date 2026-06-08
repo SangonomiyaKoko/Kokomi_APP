@@ -97,15 +97,12 @@ class NodeManager:
         """
         node = cls._nodes.get(region_id)
         if node is None:
-            api_logger.warning(
-                f"NodeManager.update_availability: region_id={region_id} not found"
-            )
-            return False
+            return
+        
         node.is_available = is_available
         api_logger.info(
-            f"NodeManager: region_id={region_id} is_available={is_available}"
+            f"NodeStatus: region_id={region_id} is_available={is_available}"
         )
-        return True
 
     @classmethod
     async def close(cls) -> None:

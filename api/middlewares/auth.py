@@ -1,6 +1,8 @@
 from typing import Optional
 from fastapi import Header, HTTPException
 
+from api.core import api_logger
+
 
 class AuthManager:
     """Token 鉴权管理器"""
@@ -22,16 +24,20 @@ class AuthManager:
         cls._tokens.clear()
         for item in tokens_data:
             token = item["token"]
-            permissions = set(item.get("permissions", []))
+            permissions = item.get("permissions", [])
             cls._tokens[token] = permissions
+
+        api_logger.info(f'Loaded API tokens: {len(tokens_data)} rows')
 
     @classmethod
     def reload(cls, tokens_data: list[dict]) -> None:
-        """重新加载所有 token
-
-        与 init() 行为一致，用于运行时刷新 token 数据
-        """
+        """重新加载所有 token"""
         cls.init(tokens_data)
+
+    @classmethod
+    def get_tokens(cls) -> list:
+        """读取所有缓存的 token"""
+        return cls._tokens
 
     @classmethod
     def get_permissions(cls, token: str) -> Optional[set[str]]:
@@ -86,11 +92,6 @@ def require_permission(permission: str):
     """
 
     def _check(assess_token: str = Header(..., alias="assess-token")) -> str:
-        if not AuthManager.is_valid_token(assess_token):
-            raise HTTPException(
-                status_code=403,
-                detail='Invalid Access Token',
-            )
         if not AuthManager.has_permission(assess_token, permission):
             raise HTTPException(
                 status_code=403,

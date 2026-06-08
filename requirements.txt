@@ -20,3 +20,5 @@ redis==8.0.0
 h11==0.16.0
 httpcore==1.0.9
 httpx==0.28.1
+click==8.4.1
+uvicorn==0.49.0

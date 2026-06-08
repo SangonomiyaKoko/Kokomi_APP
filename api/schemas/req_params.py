@@ -16,3 +16,8 @@ class Platform(str, Enum):
     QQ_GROUP = 'qq_group'
     QQ_GUILD = 'qq_guild'
     DISCORD = 'discord'
+
+class Language(str, Enum):
+    ZH_SG = 'zh_sg'
+    ZH_CN = 'zh_cn'
+    EN = 'en'

@@ -72,7 +72,7 @@ class JSONResponse:
             'message': message,
             'error': {
                 'trace_id': error_id,
-                'node_info': EnvConfig.REGION,
+                'node_info': 'main',
                 'error_name': error_name if error_name else message
             }
         }

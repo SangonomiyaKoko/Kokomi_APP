@@ -6,14 +6,13 @@ import httpx
 import threading
 from contextlib import asynccontextmanager
 from starlette.responses import StreamingResponse
-from fastapi import FastAPI, Request, HTTPException, Header, Path
+from fastapi import FastAPI, Request, HTTPException, Header
 
 from api.core import EnvConfig, api_logger
 from api.middlewares import AuthManager
 from api.response import JSONResponse
 from api.utils import TimeUtils
 from api.loggers import CSVWriter, log_queue
-from api.schemas import Region
 from api.middlewares import (
     MySQLManager,
     RedisClient,
@@ -21,9 +20,11 @@ from api.middlewares import (
 )
 from api.network import NodeManager
 from api.routers import (
-    demo_router,
     bot_router,
-    external_router
+    manager_router,
+    search_router,
+    external_router,
+    ranking_router
 )
 
 # 后台日志写入线程，用于将日志队列中的请求信息写入CSV文件
@@ -120,7 +121,7 @@ async def root():
     """测试接口连通性"""
     return JSONResponse.API_1000_Success
 
-@app.get("/token/permissions", summary="Get Token Permissions", tags=["Auth"])
+@app.get("/token/permissions/", summary="Get Token Permissions", tags=["Auth"])
 async def get_token_permissions(
     assess_token: str = Header(..., alias="assess-token"),
 ):
@@ -139,18 +140,16 @@ async def get_token_permissions(
         data={"permissions": list(permissions)}
     )
 
-@app.post("/ranking/report/", summary="Home", tags=["Default"])
-async def root(
-    token: str = Path(..., description="令牌"),
-    region: Region = Path(..., description="服务器"),
-):
-    """测试接口连通性"""
-    return JSONResponse.API_1000_Success
+app.include_router(
+    manager_router,
+    prefix="/api",
+    tags=["Manager Interface"],
+)
 
 app.include_router(
-    demo_router,
+    external_router,
     prefix="/api",
-    tags=["Demo Interface"],
+    tags=["External Interface"],
 )
 
 app.include_router(
@@ -160,7 +159,13 @@ app.include_router(
 )
 
 app.include_router(
-    external_router,
+    search_router,
     prefix="/api",
-    tags=["External Interface"],
+    tags=["Search Interface"],
+)
+
+app.include_router(
+    ranking_router,
+    prefix="/api",
+    tags=["Ranking Interface"],
 )
