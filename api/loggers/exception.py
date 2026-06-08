@@ -3,8 +3,10 @@ import redis
 import traceback
 import aiomysql
 
-from .error_log import write_error_info
 from api.response import JSONResponse
+from api.schemas import NodeInfo
+
+from .error_log import write_exception
 
 
 class ExceptionLogger:
@@ -17,16 +19,34 @@ class ExceptionLogger:
                 return result
             except Exception as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
-                    error_type = 'ProgramError',
-                    error_name = str(type(e).__name__),
-                    error_args = str(args) + str(kwargs),
-                    error_info = traceback.format_exc()
+                write_exception(
+                    error_type = "ProgramError",
+                    error_name = type(e).__name__,
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4000,'ProgramError',error_id)
+                return JSONResponse.exception('ProgramError',error_id,type(e).__name__)
         return wrapper
     
+    @staticmethod
+    def handle_network_exception_async(func):
+        "负责异步网络请求 httpx 的异常捕获"
+        async def wrapper(node: NodeInfo, *args, **kwargs):
+            try:
+                result = await func(node, *args, **kwargs)
+                return result
+            except Exception as e:
+                return {
+                    'status': 'error',
+                    'code': 2000,
+                    'message': 'APIFailed',
+                    'data': {
+                        'node_info': node.name,
+                        'error_name': type(e).__name__
+                    }
+                }
+        return wrapper
+        
     @staticmethod
     def handle_database_exception_async(func):
         "负责异步数据库 aiomysql 的异常捕获"
@@ -36,52 +56,75 @@ class ExceptionLogger:
                 return result
             except aiomysql.ProgrammingError as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
-                    error_type = "MySQL",
+                write_exception(
+                    error_type = "DatabaseError",
                     error_name = "MySQLProgrammingError",
-                    error_args = str(args) + str(kwargs),
-                    error_info = f'ERROR_{e.args[0]}\n' + str(e.args[1]) + f'\n{traceback.format_exc()}'
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4101,'MySQLProgrammingError',error_id)
+                return JSONResponse.exception('MySQLError',error_id,'ProgrammingError')
             except aiomysql.OperationalError as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
-                    error_type = "MySQL",
+                write_exception(
+                    error_type = "DatabaseError",
                     error_name = "MySQLOperationalError",
-                    error_args = str(args) + str(kwargs),
-                    error_info = f'ERROR_{e.args[0]}\n' + str(e.args[1]) + f'\n{traceback.format_exc()}'
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4102,'MySQLOperationalError',error_id)
+                return JSONResponse.exception('MySQLError',error_id,'OperationalError')
             except aiomysql.IntegrityError as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
-                    error_type = "MySQL",
+                write_exception(
+                    error_type = "DatabaseError",
                     error_name = "MySQLIntegrityError",
-                    error_args = str(args) + str(kwargs),
-                    error_info = f'ERROR_{e.args[0]}\n' + str(e.args[1]) + f'\n{traceback.format_exc()}'
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4103,'MySQLIntegrityError',error_id)
+                return JSONResponse.exception('MySQLError',error_id,'IntegrityError')
             except aiomysql.DatabaseError as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
-                    error_type = "MySQL",
+                write_exception(
+                    error_type = "DatabaseError",
                     error_name = "MySQLDatabaseError",
-                    error_args = str(args) + str(kwargs),
-                    error_info = f'ERROR_{e.args[0]}\n' + str(e.args[1]) + f'\n{traceback.format_exc()}'
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4100,'MySQLDatabaseError',error_id)
+                return JSONResponse.exception('MySQLError',error_id,'DatabaseError')
             except Exception as e:
                 error_id = str(uuid.uuid4())
-                write_error_info(
-                    error_id = error_id,
+                write_exception(
                     error_type = 'ProgramError',
-                    error_name = str(type(e).__name__),
-                    error_info = traceback.format_exc()
+                    error_name = type(e).__name__,
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
                 )
-                return JSONResponse.get_error_response(4000,'ProgramError',error_id)
+                return JSONResponse.exception('ProgramError',error_id,type(e).__name__)
+        return wrapper
+    
+    @staticmethod
+    def handle_cache_exception_async(func):
+        "负责缓存 Redis 的异常捕获"
+        async def wrapper(*args, **kwargs):
+            try:
+                result = await func(*args, **kwargs)
+                return result
+            except redis.RedisError as e:
+                error_id = str(uuid.uuid4())
+                write_exception(
+                    error_type = 'RedisError',
+                    error_name = type(e).__name__,
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
+                )
+                return JSONResponse.exception('RedisError',error_id,type(e).__name__)
+            except Exception as e:
+                error_id = str(uuid.uuid4())
+                write_exception(
+                    error_type = 'ProgramError',
+                    error_name = type(e).__name__,
+                    error_info = traceback.format_exc(),
+                    error_id=error_id
+                )
+                return JSONResponse.exception('ProgramError',error_id,type(e).__name__)
         return wrapper
     

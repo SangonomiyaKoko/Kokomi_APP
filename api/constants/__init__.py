@@ -1,5 +1,5 @@
-from .game import GameData
+from .limit import Limits
 
 __all__ = [
-    'GameData'
+    'Limits'
 ]

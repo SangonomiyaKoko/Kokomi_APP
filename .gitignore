@@ -1,4 +1,15 @@
-__pycache__/
+.idea/
 .venv/
+.vscode/
+.VSCodeCounter/
+
+__pycache__/
 *.pyc
+
 .env
+/temp/
+/logs/error/*
+/logs/exception/*
+/logs/metrics/*
+/logs/scripts/*
+init/mysql/99-test.sql

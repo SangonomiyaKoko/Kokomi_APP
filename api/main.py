@@ -1,57 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import json
-import asyncio
+
+import os
+import httpx
 import threading
-from typing import Optional
-from fastapi import FastAPI, Request, HTTPException, Security
-from fastapi.templating import Jinja2Templates
-from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 from starlette.responses import StreamingResponse
+from fastapi import FastAPI, Request, HTTPException, Header, Path
 
-from api.response import JSONResponse
-from api.schemas import Region, Platform, AuthResponse, ACResponse
 from api.core import EnvConfig, api_logger
-from api.utils import TimeUtils, GameUtils
+from api.middlewares import AuthManager
+from api.response import JSONResponse
+from api.utils import TimeUtils
 from api.loggers import CSVWriter, log_queue
-from api.database import MysqlConnection
-from api.health import HealthManager, ServiceMetrics
-from api.apis.robot import BindAPI, TokenAPI
-from api.apis.platform import StatusAPI
-from api.models import PlatformModel
+from api.schemas import Region
 from api.middlewares import (
-    TokenManager,
-    AccessManager, 
-    RedisConnection,
-    get_role, 
-    require_root, 
-    require_user
+    MySQLManager,
+    RedisClient,
+    RedisConnection
 )
-
+from api.network import NodeManager
 from api.routers import (
-    bot_router, platform_router, demo_router, statistics_router,
-    recent_router
+    demo_router,
+    bot_router,
+    external_router
 )
 
-
-# 应用程序的定期刷新任务
-async def schedule():
-    while True:
-        # 检查各服务状态
-        # await HealthManager.refresh()
-        # 检查
-        await asyncio.sleep(60)  # 每 60 秒执行一次任务
-
-
-# ------------------------------------------------------
 # 后台日志写入线程，用于将日志队列中的请求信息写入CSV文件
-# 功能逻辑：
-# 1. 主线程将日志数据放入队列log_queue
-# 2. 写线程阻塞读取队列并写入磁盘
-# 3. 程序退出时发送None信号，线程flush缓存并关闭文件
-# 避免请求处理被 I/O 阻塞，保证日志完整
-# ------------------------------------------------------
 def csv_writer_thread():
     writer = CSVWriter()
     api_logger.info('The log writing thread has been started')
@@ -66,81 +41,62 @@ def csv_writer_thread():
     writer.close()
     api_logger.info('The log writing thread has exited')
 
-
-# ------------------------------------------------------
-# 应用程序的生命周期管理
-# 功能逻辑：
-# 1. yield前的代码在应用启动时执行（startup）
-# 2. yield后的finally块在应用关闭时执行（shutdown）
-# ------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 读取工作路径
+    ROOT_DIR = os.getcwd()
+    api_logger.info(f'Working dir: {ROOT_DIR}')
     # 从环境中加载配置
-    env_file = EnvConfig.init()
+    env_file = EnvConfig.init(ROOT_DIR)
     if env_file:
         api_logger.info(f"Env config loaded: {env_file}")
     else:
         api_logger.error("Env config load failed")
-    # 启动定时任务
-    task = asyncio.create_task(schedule())
     # 启动API日志写入线程
     writer_thread = threading.Thread(target=csv_writer_thread, daemon=True)
     writer_thread.start()
-    # 初始化mysql并测试mysql连接
-    test_result = await MysqlConnection.test_mysql()
-    if test_result:
-        db_config = await PlatformModel.load_config()
-        ip_count, user_count, clan_count = AccessManager().reload(
-            data=db_config.get('blacklist', {})
-        )
-        api_logger.info(f"Loaded blacklist: IP({ip_count}) User({user_count}) Clan({clan_count})")
-        root_users, regular_users = TokenManager().reload(
-            data=db_config.get('token', {})
-        )
-        api_logger.info(f"Loaded access users: Root({root_users}) User({regular_users})")
     # 初始化并测试redis连接
+    await RedisConnection.init_conn()
     await RedisConnection.test_redis()
-    # 启动 lifespan
+    # 初始化mysql并测试mysql连接
+    await MySQLManager.init_pool()
+    await MySQLManager.test_connection()
+
+    tokens_data = await MySQLManager.load_token()
+    nodes_data = await MySQLManager.load_node_info()
+    AuthManager.init(tokens_data)
+    node_client = httpx.AsyncClient()
+    await NodeManager.init(nodes_data, node_client)
+
     try:
         yield
     finally:
-        await MysqlConnection.close_mysql()
+        await NodeManager.close()
+        await MySQLManager.close_pool()
         await RedisConnection.close_redis()
         # 发送退出信号，等待剩下数据写入并退出线程
         log_queue.put(None)
         writer_thread.join()
-        # 关闭时取消定时任务
-        task.cancel()  
 
 
-# 初始化模板
-templates = Jinja2Templates(directory="app/templates")
-# 加载APP
 app = FastAPI(lifespan=lifespan)
 
-app.add_middleware(
-    GZipMiddleware,
-    minimum_size=1000  # 大于 1KB 才压缩
-)
 
-# ------------------------------------------------------
 # 请求中间件
-# 功能逻辑：
-# 1. 所有HTTP请求在到达路由处理函数前都会经过这里
-# 2. 可以在此记录请求信息、统计耗时、处理通用逻辑
-# 3. 中间件调用call_next(request)将请求传递给后续处理
-# ------------------------------------------------------
 @app.middleware("http")
 async def request_rate_limiter(request: Request, call_next):
-    client_ip = request.client.host
-    if AccessManager().is_ip_blacklisted(client_ip):
-        raise HTTPException(
-            status_code=403,
-            detail="Forbidden"
-        )
+    # client_ip = request.client.host if request.client else None
+    # if client_ip != '127.0.0.1':
+    #     return JSONResponse(
+    #         status_code=403,
+    #         content={"detail": "Forbidden"}
+    #     )
     start = TimeUtils.timestamp_ms()
     now_time = TimeUtils.now_iso()
-    await ServiceMetrics.requests_incr('api', now_time[0:10])
+    try:
+        await RedisClient.api_record(now_time[:10])
+    except Exception:
+        pass
     response: StreamingResponse = await call_next(request)
     elapsed = int((TimeUtils.timestamp_ms() - start))
     record = [
@@ -151,146 +107,60 @@ async def request_rate_limiter(request: Request, call_next):
         response.status_code,
         elapsed
     ]
-
     try:
         log_queue.put_nowait(record)
     except Exception:
-        api_logger.warning('Log queue full!')
+        api_logger.warning('Log queue full')
         pass  # 队列满时直接丢弃，避免阻塞接口
-
     return response
 
 
-# 测试接口
-@app.get("/", summary='Home', tags=['Default'])
+@app.get("/", summary="Home", tags=["Default"])
 async def root():
-    """
-    测试接口连通性
-    """
-    return {'status':'ok','messgae':'Hello! Welcome to KokomiPlatform Interface.'}
+    """测试接口连通性"""
+    return JSONResponse.API_1000_Success
 
-@app.get("/status/", summary="API指标", tags=['Default'])
-async def testRootPermission(page: str = 'api'):
-    """
-    获取API运行期间的部分指标
-    """
-    
-    return await StatusAPI.api_stats()
+@app.get("/token/permissions", summary="Get Token Permissions", tags=["Auth"])
+async def get_token_permissions(
+    assess_token: str = Header(..., alias="assess-token"),
+):
+    """查询当前 assess-token 所拥有的权限列表
 
-@app.get("/permission/", summary="测试token权限", tags=['Default'])
-async def testRootPermission(role: str = Security(get_role)):
+    从请求头 ``assess-token`` 中提取 token，
+    返回该 token 持有的所有权限名称。
     """
-    测试当前token是否可用，以及token权限
-    """
-    
-    return JSONResponse.get_success_response(role)
-
-@app.post("/auth-token/{region}/", summary='用户授权数据接入', tags=['Default'])
-async def authToken(request: Request, region: Region = Region.ASIA, platform: Optional[Platform] = None, user_id: Optional[str] = None):
-    """
-    通过授权连接绑定或者接入数据
-    """
-    body_bytes = await request.body()
-    if body_bytes is None:
-        return templates.TemplateResponse("auth_failed.html",{"request": request})
-    try:
-        body_dict = json.loads(body_bytes.decode('utf-8'))
-    except:
-        return templates.TemplateResponse("auth_failed.html",{"request": request})
-    if body_dict.get('status') == 'ok':
-        # 先将auth数据写入
-        try:
-            body = AuthResponse(**body_dict)
-            if GameUtils.check_aid_and_rid(region, body.account_id) == False:
-                raise ValueError
-        except:
-            return templates.TemplateResponse("auth_failed.html",{"request": request})
-        result = await TokenAPI.set_auth_by_link(body,region,platform,user_id)
-        if result['code'] != 1000:
-            return templates.TemplateResponse("auth_failed.html",{"request": request})
-        # 如果有通过platfrom数据则写入绑定数据
-        if platform:
-            result = await BindAPI.postBindByLink(platform,user_id,region,body.account_id)
-            if result['code'] != 1000:
-                return templates.TemplateResponse("auth_failed.html",{"request": request})
-        expire_time = TimeUtils.fromtimestamp(body.expires_at)
-        return templates.TemplateResponse(
-            "auth_success.html",
-            {
-                "request": request,
-                "region": region.upper(),
-                "username": body.nickname,
-                "expires_at": expire_time
-            }
+    permissions = AuthManager.get_permissions(assess_token)
+    if permissions is None:
+        raise HTTPException(
+            status_code=403,
+            detail='Invalid Access Token',
         )
-    return templates.TemplateResponse("auth_failed.html",{"request": request})
+    return JSONResponse.success(
+        data={"permissions": list(permissions)}
+    )
 
-@app.post("/access-token/{region}/", summary='用户授权数据接入', tags=['Default'])
-async def acToken(ac: ACResponse, region: Region = Region.ASIA, platform: Optional[Platform] = None, user_id: Optional[str] = None):
-    """
-    通过授权接入数据
-    """
-    if GameUtils.check_aid_and_rid(region, ac.account_id) == False:
-        return JSONResponse.API_2007_IllegalAccoutID
-    return await TokenAPI.set_ac(ac, region, platform, user_id)
-# ------------------------------------------------------
-# 在主路由中注册子路由
-# 功能逻辑：
-# 1. 将routers中定义的路由统一挂载到主应用app上
-# 2. prefix: 给子路由统一添加路径前缀
-# 3. tags: 给子路由分组，用于自动生成OpenAPI文档分类
-# ------------------------------------------------------
+@app.post("/ranking/report/", summary="Home", tags=["Default"])
+async def root(
+    token: str = Path(..., description="令牌"),
+    region: Region = Path(..., description="服务器"),
+):
+    """测试接口连通性"""
+    return JSONResponse.API_1000_Success
 
 app.include_router(
-    demo_router, 
-    prefix="/api/demo", 
-    tags=['Demo Interface'],
-    dependencies=[Security(require_root)]
+    demo_router,
+    prefix="/api",
+    tags=["Demo Interface"],
 )
 
 app.include_router(
-    platform_router, 
-    prefix="/api/platform", 
-    tags=['Platform Interface'],
-    dependencies=[Security(require_root)]
+    bot_router,
+    prefix="/api",
+    tags=["Bot Interface"],
 )
 
 app.include_router(
-    bot_router, 
-    prefix="/api/bot", 
-    tags=['Robot Interface'],
-    dependencies=[Security(require_user)]
+    external_router,
+    prefix="/api",
+    tags=["External Interface"],
 )
-
-app.include_router(
-    statistics_router,
-    prefix="/api/stats",
-    tags=['Statistics Interface'],
-    dependencies=[Security(require_user)]
-)
-
-app.include_router(
-    recent_router,
-    prefix="/api/recent",
-    tags=['Recent Interface'],
-    dependencies=[Security(require_user)]
-)
-
-# ------------------------------------------------------
-# 【该功能已弃用】
-# 重写 shutdown 函数，避免某些协程在关闭时出错
-# 原理：
-# 1. 调用原始 shutdown 执行默认清理
-# 2. 等待指定时间确保后台协程完成或安全退出
-# ------------------------------------------------------
-# async def _shutdown(self, any = None):
-#     await origin_shutdown(self)
-#     wait_second = 1
-#     while wait_second > 0:
-#         api_logger.info(f'App will close after {wait_second} seconds')
-#         await asyncio.sleep(1)
-#         wait_second -= 1
-#     api_logger.info('App has been closed')
-
-# origin_shutdown = asyncio.BaseEventLoop.shutdown_default_executor
-# asyncio.BaseEventLoop.shutdown_default_executor = _shutdown

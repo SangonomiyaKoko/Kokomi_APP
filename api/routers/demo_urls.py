@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Query, Path
+from fastapi import APIRouter, Depends
 
-from api.schemas import Region
+from api.middlewares import require_permission
 from api.response import JSONResponse
-from api.utils import GameUtils
-from api.apis.demo import (
-    TestAPI
-)
 
-router = APIRouter()
+router = APIRouter(prefix="/demo")
 
-@router.get("/test/error/", summary="测试错误日志功能")
-async def testErrorLog():
-    return await TestAPI.test_error_log()
+
+@router.get("/root-only",summary="Root-Only Demo")
+async def root_only_demo(
+    _: str = Depends(require_permission("root")),
+):
+    """仅 root 权限 token 可访问的演示接口
+
+    请求头 ``assess-token`` 必须携带具有 root 权限的有效 token，
+    否则返回 403 权限不足。
+    """
+    return JSONResponse.API_1000_Success

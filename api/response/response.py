@@ -1,130 +1,93 @@
 import uuid
-from typing import Optional, Literal, Union, Any, Dict, List
-from typing_extensions import TypedDict
+from typing import Optional, Any
 
+from api.core import EnvConfig
 
-class ResponseDict(TypedDict):
-    '''返回数据格式'''
-    status: Literal['ok', 'error']
-    code: int
-    message: str
-    data: Optional[Union[Dict, List]]
+from .typed_dict import (
+    ResponseStatus,
+    SuccessResponseDict,
+    ErrorResponseDict,
+    ResponseDict
+)
+
 
 class JSONResponse:
-    '''接口返回值
+    """标准化 JSON 响应工具类
+
+    封装了 API 返回值的构造、预定义状态码常量，以及
+    从响应中提取数据的工具方法
+    """
+
+    # 部分接口只执行操作而不返回数据，此时返回 API_1000_Success 结果
+    API_1000_Success = {'status': 'ok', 'code': 1000, 'message': 'Success', 'data': None}
     
-    1000      -> 成功
-    2000-2999 -> [INFO]  业务层消息
-    3000-3999 -> [INFO]  外部接口消息
-    4000-4999 -> [ERROR] 业务层异常
-    5000-5999 -> [ERROR] 外部接口异常
-    6000-6999 -> 为前端程序预留
-    '''
-    API_1000_Success = {'status': 'ok','code': 1000,'message': 'Success','data': None}
-
-    # INFO
-
-    # 输入的服务器参数不正确
-    API_2001_IllegalRegion = {'status': 'ok','code': 2001,'message': 'IllegalRegion','data' : None}
-    # 输入的用户名称长度不正确
-    API_2002_IllegalUserName = {'status': 'ok','code': 2002,'message': 'IllegalUserName','data' : None}
-    # 输入的工会名称长度不正确
-    API_2003_IllegalClanTag = {'status': 'ok','code': 2003,'message': 'IllegalClanTag','data' : None}
-    # 输入的船只名称长度不正确
-    API_2004_IllegalShipName = {'status': 'ok','code': 2004,'message': 'IllegalShipName','data' : None}
-    # 输入的查询条件匹配船只数量过多
-    API_2005_QueryConditionsTooBroad = {'status': 'ok','code': 2005,'message': 'QueryConditionsTooBroad','data' : None}
-    # 输入的查询条件为匹配到船只
-    API_2006_ShipDataNotMatched = {'status': 'ok','code': 2006,'message': 'ShipDataNotMatched','data' : None}
-    # 输入的用户id不合法
-    API_2007_IllegalAccoutID = {'status': 'ok','code': 2007,'message': 'IllegalAccoutID','data' : None}
-    # 输入的工会id不合法
-    API_2008_IllegalClanID = {'status': 'ok','code': 2008,'message': 'IllegalClanID','data' : None}
-    # 已达到最大绑定数量限制
-    API_2009_MaxBindingLimitReached = {'status': 'ok','code': 2009,'message': 'MaxBindingLimitReached','data' : None}
-    # 不存在可以删除的绑定数据
-    API_2010_NoBindingData = {'status': 'ok','code': 2010,'message': 'NoBindingData','data' : None}
-    # 删除的绑定索引超出范围
-    API_2011_BindingIndexOutOfRange = {'status': 'ok','code': 2011,'message': 'BindingIndexOutOfRange','data' : None}
-    # 删除的绑定为当前使用中的绑定
-    API_2012_CurrentBindingBeDeleted = {'status': 'ok','code': 2012,'message': 'CurrentBindingBeDeleted','data' : None}
-    # 删除的绑定为当前使用中的绑定
-    API_2013_UserAuthorizationFailed = {'status': 'ok','code': 2013,'message': 'UserAuthorizationFailed','data' : None}
-
-    # 用户未启用recent功能
-    API_2014_FeatureNotEnabled = {'status': 'ok','code': 2014,'message': 'FeatureNotEnabled','data' : None}
-    # 账号长期未活跃或者隐藏战绩导致自动关闭recent功能
-    API_2015_FeatureAutoDisabled = {'status': 'ok','code': 2015,'message': 'FeatureAutoDisabled','data' : None}
-    # 账号不符合启用recent功能的条件
-    API_2016_AccountNotEligible = {'status': 'ok','code': 2016,'message': 'AccountNotEligible','data' : None}
-    # 该账号的RecentPro功能已经启用
-    API_2017_FeatureAlreadyEnabled = {'status': 'ok','code': 2017,'message': 'FeatureAlreadyEnabled','data' : None}
-    # 需要联系作者进行Recent数据删除
-    API_2018_ContactAuthorForDataDeletion = {'status': 'ok','code': 2018,'message': 'ContactAuthorForDataDeletion','data' : None}
-    # 普通用户数据记录上限
-    # API_2019_DataRetentionLimitDays = {'status': 'ok','code': 2019,'message': 'DataRetentionLimitDays','data' : None}
-    # 会员用户数据记录上限
-    # API_2020_DataRetentionLimitDays = {'status': 'ok','code': 2020,'message': 'DataRetentionLimitDays','data' : None}
-    # 只有启用人才能删除RecentPro资格
-    API_2021_RecentDataDeletionFailed = {'status': 'ok','code': 2021,'message': 'RecentDataDeletionFailed','data' : None}
-    
-    # 生成激活码失败
-    API_2022_ActivationCodeGenerationFailed = {'status': 'ok','code': 2022,'message': 'ActivationCodeGenerationFailed','data' : None}
-    # 激活码失效
-    API_2023_InvalidActivationCode = {'status': 'ok','code': 2023,'message': 'InvalidActivationCode','data' : None}
-    # 已使用过该激活码
-    API_2024_ActivationCodeAlreadyUsed = {'status': 'ok','code': 2024,'message': 'ActivationCodeAlreadyUsed','data' : None}
-
-    # 用户传入的ac值无效
-    API_2025_InvalidAccessToken = {'status': 'ok','code': 2025,'message': 'InvalidAccessToken','data' : None}
-    # 用户传入的ac值无效
-    API_2026_InvalidAuthToken = {'status': 'ok','code': 2026,'message': 'InvalidAuthToken','data' : None}
-    # 不支持通过 ac 查询
-    API_2027_ACQueryNotSupported = {'status': 'ok','code': 2027,'message': 'ACQueryNotSupported','data' : None}
-    # 账号所在服务器不支持
-    API_2028_ServerNotSupported = {'status': 'ok','code': 2028,'message': 'ServerNotSupported','data' : None}
-    # 
-    API_20_ = {'status': 'ok','code': 20,'message': '','data' : None}
-
-    # ERROR
-
-    # 权限不足
-    API_4001_PermissionError = {'status': 'ok','code': 4001,'message': 'PermissionError','data' : None}
-    MySQL_4100_DatabaseError = {'status': 'ok','code': 4100,'message': 'MySQLDatabaseError','data' : None}
-    MySQL_4101_ProgrammingError = {'status': 'ok','code': 4101,'message': 'MySQLProgrammingError','data' : None}
-    MySQL_4102_OperationalError = {'status': 'ok','code': 4102,'message': 'MySQLOperationalError','data' : None}
-    MySQL_4103_IntegrityError = {'status': 'ok','code': 4103,'message': 'MySQLIntegrityError','data' : None}
-    MySQL_4104_DataNotFoundError = {'status': 'ok','code': 4104,'message': 'MySQLDataNotFoundError','data' : None}
-    Redis_4200_RedisError = {'status': 'ok','code': 4200,'message': 'RedisError','data' : None}
-
+    API_NodeNotAvailable = {'status': 'ok', 'code': 1101, 'message': 'NodeNotAvailable'}
 
     @staticmethod
-    def get_success_response(
+    def success(
         data: Optional[Any] = None
-    ) -> ResponseDict:
-        "成功的返回值"
+    ) -> SuccessResponseDict:
+        """构造成功响应
+
+        返回 code=1000 的标准成功响应，附带调用方传入的业务数据。
+
+        Args:
+            data: 需要返回给客户端的业务数据，默认为 None。
+
+        Returns:
+            SuccessResponseDict
+        """
         return {
-            'status': 'ok',
+            'status': ResponseStatus.SUCCESS,
             'code': 1000,
             'message': 'Success',
             'data': data
         }
     
     @staticmethod
-    def get_error_response(
-        code: str,
+    def exception(
         message: str,
-        error_id: str = None
-    ) -> ResponseDict:
-        "失败的返回值"
+        error_id: Optional[str] = None,
+        error_name: Optional[str] = None
+    ) -> ErrorResponseDict:
+        """构造错误响应
+
+        返回指定错误码和错误信息的失败响应，自动生成 trace_id
+        并注入当前平台标识，便于后期问题定位
+
+        Args:
+            code: 业务错误码，格式遵循类级别定义的分段规则
+            message: 面向调用方的错误描述信息
+            error_id: 链路追踪 ID。未提供时自动生成 UUID
+            error_name: 错误名称，未提供时使用 message
+
+        Returns:
+            ErrorResponseDict
+        """
         if error_id is None:
             error_id = str(uuid.uuid4())
         return {
-            'status': 'error',
-            'code': code,
+            'status': ResponseStatus.ERROR,
+            'code': 3000,
             'message': message,
-            'data': {
-                'error_id': error_id,
-                'platform': 'API'
+            'error': {
+                'trace_id': error_id,
+                'node_info': EnvConfig.REGION,
+                'error_name': error_name if error_name else message
             }
         }
+
+    @staticmethod
+    def extract_data(response: ResponseDict) -> tuple[bool, Any]:
+        """从响应中提取数据
+
+        通过 code 字段判定请求成败：
+        - code 不等于 1000：视为失败，返回 (True, 完整响应体)
+        - code 等于 1000：视为成功，返回 (False, 响应中的 data 字段)
+
+        Args:
+            response: 待提取的响应字典
+        """
+        if response['code'] != 1000:
+            return True, response
+        return False, response['data']
