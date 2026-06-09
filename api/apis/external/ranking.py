@@ -43,7 +43,7 @@ class ExternalRankingAPI:
         response = await NodeAPI.patch(node, path, params)
 
         # 检查子节点响应是否成功
-        error, data = JSONResponse.extract_data(response)
+        error, _ = JSONResponse.extract_data(response)
         if error:
             return response
 

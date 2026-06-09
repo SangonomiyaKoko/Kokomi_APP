@@ -36,11 +36,10 @@ class AccountModel:
                 return JSONResponse.API_1000_Success
             else:
                 sql = """
-                    UPDAET T_user_base 
+                    UPDATE T_user_base 
                     SET 
                         username = %s,
                         register_time = FROM_UNIXTIME(%s)
-                    FROM T_user_base 
                     WHERE region_id = %s 
                       AND account_id = %s;
                 """
