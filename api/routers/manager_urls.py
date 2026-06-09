@@ -84,7 +84,7 @@ async def enable_node(
     return await NodeAPI.enableNode(region_id)
 
 
-@router.put("/node/{region}/disable/", summary="禁用于节点")
+@router.put("/node/{region}/disable/", summary="禁用子节点")
 async def disable_node(
     _: str = Depends(require_permission("root")),
     region: Region = Path(..., description="节点")
