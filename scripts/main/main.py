@@ -4,13 +4,17 @@
 import os
 import gc
 import time
+import redis
 import pymysql
 import traceback
+from redis import Redis
 from pymysql import Connection
 
 from logger import logger
 from exception import write_exception
-from network import fetch_database_meta
+from utils import load_msgpack_to_dict
+from network import fetch_database_meta, fetch_binary_file
+from ranking import clan_ranking, user_ranking
 from db_ops import (
     read_node_info,
     read_game_version, 
@@ -20,11 +24,13 @@ from db_ops import (
 from settings import (
     CLIENT_NAME,
     REFRESH_INTERVAL,
-    MYSQL_CONFIG
+    MYSQL_CONFIG,
+    REDIS_CONFIG, 
+    TEMP_DIR
 )
 
 
-def worker(mysql_connection: Connection) -> None:
+def worker(mysql_connection: Connection, redis_client: Redis) -> None:
     """单轮缓存更新执行体
 
     从主数据库读取子节点信息，逐个获取各子节点的数据库元数据并写入表中
@@ -32,78 +38,91 @@ def worker(mysql_connection: Connection) -> None:
     Args:
         mysql_connection: MySQL 数据库连接
     """
-    try:
-        with mysql_connection.cursor() as cursor:
-            node_info = read_node_info(cursor)
-            game_version = read_game_version(cursor)
-    except Exception as e:
-        error_name = type(e).__name__
-        logger.error(f"Failed to read node info: {error_name}")
-        write_exception(
-            error_type="DatabaseError",
-            error_name=error_name,
-            error_info=traceback.format_exc(),
-        )
-        return
+    # try:
+    #     with mysql_connection.cursor() as cursor:
+    #         node_info = read_node_info(cursor)
+    #         game_version = read_game_version(cursor)
+    # except Exception as e:
+    #     error_name = type(e).__name__
+    #     logger.error(f"Failed to read node info: {error_name}")
+    #     write_exception(
+    #         error_type="DatabaseError",
+    #         error_name=error_name,
+    #         error_info=traceback.format_exc(),
+    #     )
+    #     return
     
-    total_users = 0
-    total_clans = 0
+    # total_users = 0
+    # total_clans = 0
 
-    for node_id, node_data in node_info.items():
-        name, host, port, token, is_available = node_data
+    # for node_id, node_data in node_info.items():
+    #     name, host, port, token, is_available = node_data
 
-        if not is_available:
-            logger.info(f"Node {name.upper()} is marked unavailable")
-            continue
+    #     if not is_available:
+    #         logger.info(f"Node {name.upper()} is marked unavailable")
+    #         continue
 
-        base_url = f"http://{host}:{port}"
+    #     base_url = f"http://{host}:{port}"
 
-        response = fetch_database_meta(base_url, token)
+    #     response = fetch_database_meta(base_url, token)
 
-        if response is None or response.get("code") != 1000:
-            logger.error(f"Node {name} exception: {response}")
-            continue
+    #     if response is None or response.get("code") != 1000:
+    #         logger.error(f"Node {name} exception: {response}")
+    #         continue
 
-        data = response.get("data", {})
-        version = data.get('version')
-        user_meta = data.get("user", {})
-        clan_meta = data.get("clan", {})
-        cache_meta = data.get("cache", {})
-        total_users += user_meta.get('total', 0)
-        total_clans += clan_meta.get('total', 0)
-        logger.info(
-            f"Node {name.upper().ljust(4)} — "
-            f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
-            f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
-            f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
-            f"version: {version}"
-        )
+    #     data = response.get("data", {})
+    #     version = data.get('version')
+    #     user_meta = data.get("user", {})
+    #     clan_meta = data.get("clan", {})
+    #     cache_meta = data.get("cache", {})
+    #     total_users += user_meta.get('total', 0)
+    #     total_clans += clan_meta.get('total', 0)
+    #     logger.info(
+    #         f"Node {name.upper().ljust(4)} — "
+    #         f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
+    #         f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
+    #         f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
+    #         f"version: {version}"
+    #     )
 
-        try:
-            with mysql_connection.cursor() as cursor:
-                write_node_data(cursor, node_id, data)
-                if node_id == 3:
-                    update_game_version(cursor, 1, game_version.get(1), version)
-                elif node_id == 4:
-                    update_game_version(cursor, 2, game_version.get(2), version)
+    #     try:
+    #         with mysql_connection.cursor() as cursor:
+    #             write_node_data(cursor, node_id, data)
+    #             if node_id == 3:
+    #                 update_game_version(cursor, 1, game_version.get(1), version)
+    #             elif node_id == 4:
+    #                 update_game_version(cursor, 2, game_version.get(2), version)
 
-            mysql_connection.commit()
-        except Exception as e:
-            mysql_connection.rollback()
-            error_name = type(e).__name__
-            logger.error(f"Database operation exception: {error_name}")
-            write_exception(
-                error_type="DatabaseError",
-                error_name=error_name,
-                error_info=traceback.format_exc(),
-            )
+    #         mysql_connection.commit()
+    #     except Exception as e:
+    #         mysql_connection.rollback()
+    #         error_name = type(e).__name__
+    #         logger.error(f"Database operation exception: {error_name}")
+    #         write_exception(
+    #             error_type="DatabaseError",
+    #             error_name=error_name,
+    #             error_info=traceback.format_exc(),
+    #         )
     
-    logger.info(
-        f"Summary   — "
-        f"users: {total_users},  "
-        f"clans: {total_clans}"
-    )
+    # logger.info(
+    #     f"Summary   — "
+    #     f"users: {total_users},  "
+    #     f"clans: {total_clans}"
+    # )
 
+    # for index in ['clan']:
+    #     for _, node_data in node_info.items():
+    #         name, host, port, token, is_available = node_data
+
+    #         if not is_available:
+    #             logger.info(f"Node {name.upper()} is marked unavailable")
+    #             continue
+
+    #         base_url = f"http://{host}:{port}"
+    #         fetch_binary_file(base_url, token, index, name)
+
+    # clan_ranking(redis_client)
+    user_ranking(redis_client)
 
 def main():
     """主调度循环
@@ -112,16 +131,19 @@ def main():
     按 REFRESH_INTERVAL 补齐 sleep。
     异常不会中断循环，但会清理服务状态 key 以便外部监控感知。
     """
+    redis_client = None
     mysql_connection = None
 
     while True:
         start = time.monotonic()
 
         try:
+            redis_client = redis.Redis(**REDIS_CONFIG)
             mysql_connection = pymysql.connect(**MYSQL_CONFIG)
 
             worker(
-                mysql_connection=mysql_connection
+                mysql_connection=mysql_connection,
+                redis_client=redis_client
             )
         except Exception as e:
             error_name = type(e).__name__
@@ -132,8 +154,11 @@ def main():
                 error_info=traceback.format_exc(),
             )
         finally:
+            if redis_client:
+                redis_client.close()
             if mysql_connection:
                 mysql_connection.close()
+            redis_client = None
             mysql_connection = None
 
             gc.collect()

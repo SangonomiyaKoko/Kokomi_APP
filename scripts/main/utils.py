@@ -1,3 +1,4 @@
+import msgpack
 from datetime import datetime, timezone
 
 from settings import DATE_FMT
@@ -14,3 +15,16 @@ def get_current_timestamp() -> int:
 def get_current_iso_time() -> str:
     """获取当前 UTC 时间的 ISO 格式字符串"""
     return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+def load_msgpack_to_dict(file_path: str) -> dict:
+    """读取 msgpack 文件并反序列化为 dict
+    
+    Args:
+        file_path: msgpack 文件路径（支持 str 或 Path 对象）
+    """
+    if not file_path.exists():
+        return None
+    
+    with open(file_path, 'rb') as f:
+        data = msgpack.unpack(f, raw=False)
+    return data

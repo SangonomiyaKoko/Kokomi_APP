@@ -7,6 +7,5 @@ __pycache__/
 *.pyc
 
 .env
-/temp/
 docker-compose.yml
 init/mysql/99-test.sql
