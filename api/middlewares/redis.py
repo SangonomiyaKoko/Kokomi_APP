@@ -13,9 +13,8 @@ class RedisConnection:
     _conn: Optional[Redis] = None
 
     @staticmethod
-    def _build_redis_url() -> str:
+    def _build_redis_url(config) -> str:
         """构建Redis连接URL"""
-        config = EnvConfig.get_config()
         return (
             f"redis://:{config.REDIS.password}"
             f"@{config.REDIS.host}"
@@ -27,12 +26,22 @@ class RedisConnection:
     async def init_conn(cls) -> Redis:
         """应用启动时调用，初始化Redis连接"""
         try:
-            redis_url = cls._build_redis_url()
-            cls._conn = redis.from_url(
-                url=redis_url,
-                encoding="utf-8",
-                decode_responses=True
-            )
+            config = EnvConfig.get_config()
+            redis_url = cls._build_redis_url(config)
+            if config.REDIS.protocol == '0':
+                cls._conn = redis.from_url(
+                    url=redis_url,
+                    encoding="utf-8",
+                    decode_responses=True
+                )
+            else:
+                # 兼容旧版本 Redis 协议
+                cls._conn = redis.from_url(
+                    url=redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                    protocol=2
+                )
             api_logger.info("Redis connection initialized successfully")
         except Exception as e:
             api_logger.error(f"Failed to initialize Redis connection: {e}")

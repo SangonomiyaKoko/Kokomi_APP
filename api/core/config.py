@@ -20,6 +20,7 @@ class RedisConfig:
     port: int
     password: str
     db: str
+    protocol: str
 
 @dataclass(frozen=True)
 class RuntimeConfig:
@@ -73,7 +74,8 @@ class EnvConfig:
                 host=cls._require_env("REDIS_HOST"),
                 port=int(cls._require_env("REDIS_PORT", "6379")),
                 password=cls._require_env("REDIS_PASSWORD"),
-                db=int(cls._require_env("REDIS_DATABASE", "0"))
+                db=int(cls._require_env("REDIS_DATABASE", "0")),
+                protocol=int(cls._require_env("REDIS_PROTOCOL", "0"))
             )
         )
 
