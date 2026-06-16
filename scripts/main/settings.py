@@ -32,6 +32,7 @@ MYSQL_CONFIG = {
     "database": os.getenv("MYSQL_DATABASE"),
     "autocommit": False  # 关闭自动提交，改为手动控制事务，以便在发生异常时能正确回滚，保证数据一致性
 }
+REDIS_PROTOCOL = os.getenv("REDIS_PROTOCOL", '0')
 REDIS_CONFIG = {
     "host": os.getenv("REDIS_HOST"),
     "port": int(os.getenv("REDIS_PORT", 6379)),

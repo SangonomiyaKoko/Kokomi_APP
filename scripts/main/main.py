@@ -24,7 +24,8 @@ from settings import (
     CLIENT_NAME,
     REFRESH_INTERVAL,
     MYSQL_CONFIG,
-    REDIS_CONFIG
+    REDIS_CONFIG,
+    REDIS_PROTOCOL
 )
 
 
@@ -136,7 +137,10 @@ def main():
         start = time.monotonic()
 
         try:
-            redis_client = redis.Redis(**REDIS_CONFIG)
+            if REDIS_PROTOCOL == '0':
+                redis_client = redis.Redis(**REDIS_CONFIG)
+            else:
+                redis_client = redis.Redis(**REDIS_CONFIG, protocol=2)
             mysql_connection = pymysql.connect(**MYSQL_CONFIG)
 
             worker(
