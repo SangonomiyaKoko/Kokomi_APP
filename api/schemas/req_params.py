@@ -7,6 +7,14 @@ class Region(str, Enum):
     RU = "ru"
     CN = "cn"
 
+class RankingRegion(str, Enum):
+    ALL = "all"
+    ASIA = "asia"
+    EU = "eu"
+    NA = "na"
+    RU = "ru"
+    CN = "cn"
+
 class Server(str, Enum):
     WG = 'wg'
     LESTA = 'lesta'

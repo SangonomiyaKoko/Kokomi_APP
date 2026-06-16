@@ -15,3 +15,10 @@
 2026-06-12 02:51:56 [ERROR] A fatal error occurred in the loop: TypeError
 2026-06-12 03:10:00 [ERROR] A fatal error occurred in the loop: AttributeError
 2026-06-12 03:10:25 [ERROR] A fatal error occurred in the loop: ValueError
+2026-06-12 22:17:13 [ERROR] Download file failed: ReadTimeout
+2026-06-12 22:17:15 [ERROR] Download file failed: HTTPError
+2026-06-12 22:17:15 [ERROR] Download file failed: HTTPError
+2026-06-12 22:17:16 [ERROR] Download file failed: HTTPError
+2026-06-12 22:17:17 [ERROR] Download file failed: HTTPError
+2026-06-12 22:17:17 [ERROR] Download file failed: HTTPError
+2026-06-13 13:50:14 [ERROR] A fatal error occurred in the loop: TypeError

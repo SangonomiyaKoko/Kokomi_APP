@@ -12,7 +12,6 @@ from pymysql import Connection
 
 from logger import logger
 from exception import write_exception
-from utils import load_msgpack_to_dict
 from network import fetch_database_meta, fetch_binary_file
 from ranking import clan_ranking, user_ranking
 from db_ops import (
@@ -25,8 +24,7 @@ from settings import (
     CLIENT_NAME,
     REFRESH_INTERVAL,
     MYSQL_CONFIG,
-    REDIS_CONFIG, 
-    TEMP_DIR
+    REDIS_CONFIG
 )
 
 
@@ -110,7 +108,7 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
     #     f"clans: {total_clans}"
     # )
 
-    # for index in ['clan']:
+    # for index in ['clan', 'ship']:
     #     for _, node_data in node_info.items():
     #         name, host, port, token, is_available = node_data
 
@@ -121,7 +119,7 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
     #         base_url = f"http://{host}:{port}"
     #         fetch_binary_file(base_url, token, index, name)
 
-    # clan_ranking(redis_client)
+    clan_ranking(redis_client)
     user_ranking(redis_client)
 
 def main():

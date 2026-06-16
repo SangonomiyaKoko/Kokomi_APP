@@ -1,12 +1,11 @@
 import uuid
 from typing import Optional, Any
 
-from api.core import EnvConfig
-
 from .typed_dict import (
     ResponseStatus,
     SuccessResponseDict,
     ErrorResponseDict,
+    APIFailedResponseDict,
     ResponseDict
 )
 
@@ -21,7 +20,7 @@ class JSONResponse:
     # 部分接口只执行操作而不返回数据，此时返回 API_1000_Success 结果
     API_1000_Success = {'status': 'ok', 'code': 1000, 'message': 'Success', 'data': None}
     
-    API_NodeNotAvailable = {'status': 'ok', 'code': 1101, 'message': 'NodeNotAvailable'}
+    API_NodeNotAvailable = {'status': 'ok', 'code': 1001, 'message': 'NodeNotAvailable'}
 
     @staticmethod
     def success(
@@ -74,6 +73,28 @@ class JSONResponse:
                 'trace_id': error_id,
                 'node_info': 'main',
                 'error_name': error_name if error_name else message
+            }
+        }
+    
+    @staticmethod
+    def game_api_failed(
+        error_name: str
+    ) -> APIFailedResponseDict:
+        """构造请求API接口错误响应
+
+        Args:
+            error_name: 错误名称或异常类型
+
+        Returns:
+            APIFailedResponseDict
+        """
+        return {
+            'status': ResponseStatus.ERROR,
+            'code': 2000,
+            'message': 'APIFailed',
+            'data': {
+                'node_info': 'main',
+                'error_name': error_name
             }
         }
 

@@ -21,6 +21,14 @@ class ErrorInfo(TypedDict):
     node_info: str     # 当前节点信息
     error_name: str    # 错误类型
 
+class APIFiledInfo(TypedDict):
+    """错误追踪信息
+
+    用于在错误响应中携带问题定位所需的关键信息。
+    """
+    node_info: str     # 当前节点信息
+    error_name: str    # 错误类型
+
 class SuccessResponseDict(TypedDict):
     """成功响应结构
 
@@ -42,6 +50,13 @@ class ErrorResponseDict(TypedDict):
     code: int
     message: str
     error: ErrorInfo
+
+class APIFailedResponseDict(TypedDict):
+    """业务错误响应结构"""
+    status: Literal['ok']
+    code: int
+    message: str
+    data: APIFiledInfo
 
 class InfoResponseDict(TypedDict):
     """信息提示响应结构

@@ -1,17 +1,21 @@
 import sys
 import logging
+from tqdm import tqdm
 from pathlib import Path
 
+from utils import get_formatted_date
 from settings import (
     LOG_DIR,
+    USE_TQDM,
     DATE_FMT,
     CLIENT_NAME
 )
 
 
-class CustomLogger(logging.Logger):
+class TqdmAwareLogger(logging.Logger):
     def __init__(self, name: str, level: int = logging.DEBUG):
         super().__init__(name, level)
+        self._use_tqdm = False
         self._console_handler = None
         self._file_handler = None
 
@@ -21,6 +25,72 @@ class CustomLogger(logging.Logger):
         self._file_handler = file_handler
         self.addHandler(console_handler)
         self.addHandler(file_handler)
+
+    def enable_tqdm(self) -> None:
+        """切换到 tqdm 输出模式"""
+        if not self._use_tqdm and USE_TQDM:
+            self._use_tqdm = True
+            # 移除控制台 handler，但保留文件 handler
+            if self._console_handler and self._console_handler in self.handlers:
+                self.removeHandler(self._console_handler)
+
+    def disable_tqdm(self) -> None:
+        """切换回标准输出模式"""
+        if self._use_tqdm:
+            self._use_tqdm = False
+            # 重新添加控制台 handler
+            if self._console_handler and self._console_handler not in self.handlers:
+                self.addHandler(self._console_handler)
+
+    def _tqdm_log(self, level: str, msg: str, *args, **kwargs) -> None:
+        """通过 tqdm.write 输出日志，同时写入文件"""
+        if args:
+            try:
+                msg = msg % args
+            except TypeError:
+                msg = msg
+
+        # tqdm 输出到控制台
+        tqdm.write(f'{get_formatted_date()} [{level}] {msg}')
+        
+        # 如果是 WARNING 及以上，写入文件
+        level_value = getattr(logging, level, logging.WARNING)
+        if level_value >= logging.WARNING and self._file_handler:
+            # 直接写入文件
+            log_record = logging.LogRecord(
+                name=self.name,
+                level=level_value,
+                pathname='',
+                lineno=0,
+                msg=msg,
+                args=(),
+                exc_info=None
+            )
+            self._file_handler.emit(log_record)
+
+    def info(self, msg: str, *args, **kwargs) -> None:
+        if self._use_tqdm:
+            self._tqdm_log('INFO', msg, *args, **kwargs)
+        else:
+            super().info(msg, *args, **kwargs)
+
+    def warning(self, msg: str, *args, **kwargs) -> None:
+        if self._use_tqdm:
+            self._tqdm_log('WARNING', msg, *args, **kwargs)
+        else:
+            super().warning(msg, *args, **kwargs)
+
+    def debug(self, msg: str, *args, **kwargs) -> None:
+        if self._use_tqdm:
+            self._tqdm_log('DEBUG', msg, *args, **kwargs)
+        else:
+            super().debug(msg, *args, **kwargs)
+
+    def error(self, msg: str, *args, **kwargs) -> None:
+        if self._use_tqdm:
+            self._tqdm_log('ERROR', msg, *args, **kwargs)
+        else:
+            super().error(msg, *args, **kwargs)
 
 
 def _create_console_handler(level: int) -> logging.StreamHandler:
@@ -48,14 +118,14 @@ def _create_file_handler() -> logging.FileHandler:
     return handler
 
 
-def init_logger(console_level: int = logging.INFO) -> CustomLogger:
+def init_logger(console_level: int = logging.INFO) -> TqdmAwareLogger:
     """初始化 logger
     Args:
         console_level: 控制台输出级别（DEBUG 或 INFO）
     """
     # 保存原 logger 类并设置自定义类
     old_class = logging.getLoggerClass()
-    logging.setLoggerClass(CustomLogger)
+    logging.setLoggerClass(TqdmAwareLogger)
     
     # 获取或创建 logger
     logger = logging.getLogger(CLIENT_NAME)
