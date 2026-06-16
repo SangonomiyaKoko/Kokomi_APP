@@ -36,88 +36,88 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
     Args:
         mysql_connection: MySQL 数据库连接
     """
-    # try:
-    #     with mysql_connection.cursor() as cursor:
-    #         node_info = read_node_info(cursor)
-    #         game_version = read_game_version(cursor)
-    # except Exception as e:
-    #     error_name = type(e).__name__
-    #     logger.error(f"Failed to read node info: {error_name}")
-    #     write_exception(
-    #         error_type="DatabaseError",
-    #         error_name=error_name,
-    #         error_info=traceback.format_exc(),
-    #     )
-    #     return
+    try:
+        with mysql_connection.cursor() as cursor:
+            node_info = read_node_info(cursor)
+            game_version = read_game_version(cursor)
+    except Exception as e:
+        error_name = type(e).__name__
+        logger.error(f"Failed to read node info: {error_name}")
+        write_exception(
+            error_type="DatabaseError",
+            error_name=error_name,
+            error_info=traceback.format_exc(),
+        )
+        return
     
-    # total_users = 0
-    # total_clans = 0
+    total_users = 0
+    total_clans = 0
 
-    # for node_id, node_data in node_info.items():
-    #     name, host, port, token, is_available = node_data
+    for node_id, node_data in node_info.items():
+        name, host, port, token, is_available = node_data
 
-    #     if not is_available:
-    #         logger.info(f"Node {name.upper()} is marked unavailable")
-    #         continue
+        if not is_available:
+            logger.info(f"Node {name.upper()} is marked unavailable")
+            continue
 
-    #     base_url = f"http://{host}:{port}"
+        base_url = f"http://{host}:{port}"
 
-    #     response = fetch_database_meta(base_url, token)
+        response = fetch_database_meta(base_url, token)
 
-    #     if response is None or response.get("code") != 1000:
-    #         logger.error(f"Node {name} exception: {response}")
-    #         continue
+        if response is None or response.get("code") != 1000:
+            logger.error(f"Node {name} exception: {response}")
+            continue
 
-    #     data = response.get("data", {})
-    #     version = data.get('version')
-    #     user_meta = data.get("user", {})
-    #     clan_meta = data.get("clan", {})
-    #     cache_meta = data.get("cache", {})
-    #     total_users += user_meta.get('total', 0)
-    #     total_clans += clan_meta.get('total', 0)
-    #     logger.info(
-    #         f"Node {name.upper().ljust(4)} — "
-    #         f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
-    #         f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
-    #         f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
-    #         f"version: {version}"
-    #     )
+        data = response.get("data", {})
+        version = data.get('version')
+        user_meta = data.get("user", {})
+        clan_meta = data.get("clan", {})
+        cache_meta = data.get("cache", {})
+        total_users += user_meta.get('total', 0)
+        total_clans += clan_meta.get('total', 0)
+        logger.info(
+            f"Node {name.upper().ljust(4)} — "
+            f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
+            f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
+            f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
+            f"version: {version}"
+        )
 
-    #     try:
-    #         with mysql_connection.cursor() as cursor:
-    #             write_node_data(cursor, node_id, data)
-    #             if node_id == 3:
-    #                 update_game_version(cursor, 1, game_version.get(1), version)
-    #             elif node_id == 4:
-    #                 update_game_version(cursor, 2, game_version.get(2), version)
+        try:
+            with mysql_connection.cursor() as cursor:
+                write_node_data(cursor, node_id, data)
+                if node_id == 3:
+                    update_game_version(cursor, 1, game_version.get(1), version)
+                elif node_id == 4:
+                    update_game_version(cursor, 2, game_version.get(2), version)
 
-    #         mysql_connection.commit()
-    #     except Exception as e:
-    #         mysql_connection.rollback()
-    #         error_name = type(e).__name__
-    #         logger.error(f"Database operation exception: {error_name}")
-    #         write_exception(
-    #             error_type="DatabaseError",
-    #             error_name=error_name,
-    #             error_info=traceback.format_exc(),
-    #         )
+            mysql_connection.commit()
+        except Exception as e:
+            mysql_connection.rollback()
+            error_name = type(e).__name__
+            logger.error(f"Database operation exception: {error_name}")
+            write_exception(
+                error_type="DatabaseError",
+                error_name=error_name,
+                error_info=traceback.format_exc(),
+            )
     
-    # logger.info(
-    #     f"Summary   — "
-    #     f"users: {total_users},  "
-    #     f"clans: {total_clans}"
-    # )
+    logger.info(
+        f"Summary   — "
+        f"users: {total_users},  "
+        f"clans: {total_clans}"
+    )
 
-    # for index in ['clan', 'ship']:
-    #     for _, node_data in node_info.items():
-    #         name, host, port, token, is_available = node_data
+    for index in ['clan', 'ship']:
+        for _, node_data in node_info.items():
+            name, host, port, token, is_available = node_data
 
-    #         if not is_available:
-    #             logger.info(f"Node {name.upper()} is marked unavailable")
-    #             continue
+            if not is_available:
+                logger.info(f"Node {name.upper()} is marked unavailable")
+                continue
 
-    #         base_url = f"http://{host}:{port}"
-    #         fetch_binary_file(base_url, token, index, name)
+            base_url = f"http://{host}:{port}"
+            fetch_binary_file(base_url, token, index, name)
 
     clan_ranking(redis_client)
     user_ranking(redis_client)
