@@ -12,12 +12,16 @@ from pymysql import Connection
 
 from logger import logger
 from exception import write_exception
+from game_api import fetch_ship_data
 from network import fetch_database_meta, fetch_binary_file
 from ranking import clan_ranking, user_ranking
 from db_ops import (
     read_node_info,
+    read_name_version,
     read_game_version, 
+    read_ship_info,
     update_game_version,
+    refresh_ship_name,
     write_node_data
 )
 from settings import (
@@ -41,6 +45,8 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
         with mysql_connection.cursor() as cursor:
             node_info = read_node_info(cursor)
             game_version = read_game_version(cursor)
+            name_version = read_name_version(cursor)
+            ship_info = read_ship_info(cursor)
     except Exception as e:
         error_name = type(e).__name__
         logger.error(f"Failed to read node info: {error_name}")
@@ -83,14 +89,25 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
             f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
             f"version: {version}"
         )
+        api_response = None
+        if node_id == 3:
+            if name_version[1] is None or name_version[1] != version:
+                api_response = fetch_ship_data(1)
+        elif node_id == 4:
+            if name_version[2] is None or name_version[2] != version:
+                api_response = fetch_ship_data(2)
 
         try:
             with mysql_connection.cursor() as cursor:
                 write_node_data(cursor, node_id, data)
                 if node_id == 3:
                     update_game_version(cursor, 1, game_version.get(1), version)
+                    if api_response:
+                        refresh_ship_name(cursor, 1, api_response, ship_info[1], version)
                 elif node_id == 4:
                     update_game_version(cursor, 2, game_version.get(2), version)
+                    if api_response:
+                        refresh_ship_name(cursor, 2, api_response, ship_info[2], version)
 
             mysql_connection.commit()
         except Exception as e:
@@ -109,19 +126,19 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
         f"clans: {total_clans}"
     )
 
-    for index in ['clan', 'ship']:
-        for _, node_data in node_info.items():
-            name, host, port, token, is_available = node_data
+    # for index in ['clan', 'ship']:
+    #     for _, node_data in node_info.items():
+    #         name, host, port, token, is_available = node_data
 
-            if not is_available:
-                logger.info(f"Node {name.upper()} is marked unavailable")
-                continue
+    #         if not is_available:
+    #             logger.info(f"Node {name.upper()} is marked unavailable")
+    #             continue
 
-            base_url = f"http://{host}:{port}"
-            fetch_binary_file(base_url, token, index, name)
+    #         base_url = f"http://{host}:{port}"
+    #         fetch_binary_file(base_url, token, index, name)
 
-    clan_ranking(redis_client)
-    user_ranking(redis_client)
+    # clan_ranking(redis_client)
+    # user_ranking(redis_client)
 
 def main():
     """主调度循环

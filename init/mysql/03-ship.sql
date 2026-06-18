@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS T_ship_info (
     ship_id          BIGINT       NOT NULL,         -- 1-11位的非连续数字
 
     is_enabled       BOOLEAN      DEFAULT FALSE,    -- 是否启用统计
+    is_demo          BOOLEAN      DEFAULT FALSE,    -- 是否为测试船
     is_old           BOOLEAN      DEFAULT FALSE,    -- 是否为旧船
     tier             TINYINT      DEFAULT 1,        -- 船只等级 1-11
     type_id          TINYINT      DEFAULT 1,        -- D_ship_type.id
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS T_ship_info (
     premium          BOOLEAN      DEFAULT FALSE,    -- 是否为金币船
     special          BOOLEAN      DEFAULT FALSE,    -- 是否为特种船
     index_code       VARCHAR(10)  DEFAULT NULL,     -- 索引代码
+    ship_name        VARCHAR(50)  DEFAULT NULL,     -- 船只名称
 
     created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -39,7 +41,7 @@ CREATE TABLE IF NOT EXISTS T_ship_info (
     INDEX idx_tier (corporation_id, tier),
     INDEX idx_type (corporation_id, type_id),
     INDEX idx_nation (corporation_id, nation_id),
-    UNIQUE INDEX idx_sid (corporation_id, is_enabled, is_old, ship_id)
+    UNIQUE INDEX idx_sid (corporation_id, is_enabled, is_demo, is_old, ship_id)
 );
 
 -- 船只名称表
@@ -56,7 +58,6 @@ CREATE TABLE IF NOT EXISTS T_ship_name (
     en_full          VARCHAR(50)  DEFAULT NULL,     -- 英文（全称）
     ja               VARCHAR(50)  DEFAULT NULL,     -- 日文
     ru               VARCHAR(50)  DEFAULT NULL,     -- 俄文
-    verify           BOOLEAN      DEFAULT FALSE,    -- 是否已验证（俄服特有）
 
     created_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

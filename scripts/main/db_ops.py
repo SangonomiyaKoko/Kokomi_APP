@@ -2,6 +2,44 @@ from typing import Dict, List, Any
 from pymysql.cursors import Cursor
 
 
+from logger import logger
+
+# 类型映射（来自 D_ship_type）
+TYPE_MAP = {
+    'AirCarrier': 1,
+    'Battleship': 2,
+    'Cruiser': 3,
+    'Destroyer': 4,
+    'Submarine': 5
+}
+
+# 国家映射（来自 D_ship_nation）
+NATION_MAP = {
+    'usa': 1,
+    'japan': 2,
+    'germany': 3,
+    'uk': 4,
+    'ussr': 5,
+    'france': 6,
+    'italy': 7,
+    'pan_asia': 8,
+    'europe': 9,
+    'netherlands': 10,
+    'commonwealth': 11,
+    'pan_america': 12,
+    'spain': 13
+}
+
+# 稀有度映射（来自 D_ship_rarity）
+RARITY_MAP = {
+    '': None,
+    'Common': 1,
+    'Uncommon': 2,
+    'Rare': 3,
+    'Epic': 4,
+    'Legendary': 5
+}
+
 def read_node_info(cursor: Cursor) -> Dict[int, List[Any]]:
     """读取子节点连接信息
 
@@ -33,6 +71,19 @@ def read_node_info(cursor: Cursor) -> Dict[int, List[Any]]:
         result[row[0]] = [row[1], row[2], row[3], row[4], row[5]]
     return result
 
+def read_name_version(cursor: Cursor) -> Dict[int, str | None]:
+    sql = """
+        SELECT id, name_version 
+        FROM T_ship_base;
+    """
+    cursor.execute(sql)
+    data = cursor.fetchall()
+
+    result = {}
+    for name in data:
+        result[name[0]] = name[1]
+    return result
+
 def read_game_version(cursor: Cursor) -> Dict[int, str | None]:
     result = {
         1: None,
@@ -52,6 +103,30 @@ def read_game_version(cursor: Cursor) -> Dict[int, str | None]:
             result[cid] = data[0]
     return result
 
+def read_ship_info(cursor: Cursor) -> Dict[int, str | None]:
+    result = {
+        1: None,
+        2: None
+    }
+    for cid in [1,2]:
+        sql = """
+            SELECT ship_id, is_enabled 
+            FROM T_ship_info 
+            WHERE corporation_id = %s 
+            ORDER BY id;
+        """
+        cursor.execute(sql, [cid])
+        data = cursor.fetchall()
+
+        existing_ship_ids = []
+        enabled_ship_ids = []
+        for ship in data:
+            existing_ship_ids.append(ship[0])
+            if ship[1]:
+                enabled_ship_ids.append(ship[0])
+        result[cid] = [existing_ship_ids, enabled_ship_ids]
+
+    return result
 
 def update_game_version(cursor: Cursor, cid: int, local: str, latest: str) -> None:
     if latest is None or local == latest:
@@ -77,6 +152,105 @@ def update_game_version(cursor: Cursor, cid: int, local: str, latest: str) -> No
         2: 'lesta'
     }.get(cid)
     cursor.execute(sql, [cid, name, latest])
+
+
+def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str):
+    latest_data = {}
+    existing_ship_ids, enabled_ship_ids = ship_info
+
+    # 解析数据
+    for ship_id, ship_data in response.items():
+        ship_tags = ship_data.get('tags', [])
+
+        # 去除测试船只
+        if 'demoWithoutStats' in ship_tags or 'demoWithoutStatsPrem' in ship_tags:
+            is_demo = True
+        else:
+            is_demo = False
+
+        loc = ship_data.get('localization', {})
+        if cid == 1:
+            default_name: str = loc.get('shortmark', {})['en']
+        else:
+            default_name: str = loc.get('shortmark', {})['ru']
+
+        if default_name.startswith('[') and default_name.endswith(']'):
+            continue
+
+        prefix, name = ship_data['name'].split('_', 1) 
+
+        latest_data[int(ship_id)] = {
+            'is_demo': is_demo,
+            'tier': ship_data['level'],
+            'type_id': TYPE_MAP.get(ship_tags[0], 1),
+            'nation_id': NATION_MAP.get(ship_data['nation'], 1),
+            'premium': 1 if "uiPremium" in ship_tags else 0,
+            'special': 1 if "uiSpecial" in ship_tags else 0,
+            'index': prefix,
+            'name': name,
+            'en_short': default_name,
+            'en_full': loc.get('mark', {}).get('en', default_name),
+            'zh_cn': loc.get('shortmark', {}).get('zh_cn'),
+            'zh_sg': loc.get('shortmark', {}).get('zh_sg', default_name),
+            'zh_tw': loc.get('shortmark', {}).get('zh_tw'),
+            'ja': loc.get('shortmark', {}).get('ja', default_name),
+            'ru': loc.get('shortmark', {}).get('ru', default_name)
+        }
+
+    for ship_id, ship in latest_data.items():
+        if ship_id not in existing_ship_ids:
+            cursor.execute(
+                """INSERT INTO T_ship_info
+                    (corporation_id, ship_id, is_enabled, is_old, is_demo, tier,
+                    type_id, nation_id, rarity_id, premium, special,
+                    index_code, ship_name)
+                    VALUES
+                    (%s, %s, TRUE, FALSE, %s, %s, %s, %s, NULL, %s, %s, %s, %s);""",
+                [cid, ship_id, ship['is_demo'], ship['tier'], ship['type_id'], ship['nation_id'],
+                    ship['premium'], ship['special'], ship['index'], ship['name']]
+            )
+            cursor.execute(
+                """INSERT INTO T_ship_name
+                    (corporation_id, ship_id,
+                    zh_cn, zh_sg, zh_tw,
+                    en_short, en_full, ja, ru)
+                    VALUES
+                    (%s, %s, %s, %s, %s, %s, %s, %s, %s);""",
+                [cid, ship_id, ship['zh_cn'], ship['zh_sg'], ship['zh_tw'],
+                    ship['en_short'], ship['en_full'], ship['ja'], ship['ru']]
+            )
+            cursor.execute(
+                """INSERT INTO T_ship_nickname_zh
+                    (corporation_id, ship_id)
+                    VALUES (%s, %s);""",
+                [cid, ship_id]
+            )
+            logger.info(f"C_{cid} - Insert ship: {ship_id} {ship['index']} {ship['name']}")
+        else:
+            cursor.execute(
+                """UPDATE T_ship_info 
+                SET premium = %s, special = %s 
+                WHERE corporation_id = %s 
+                  AND ship_id = %s;""",
+                [ship['premium'], ship['special'], cid, ship_id]
+            )
+
+    for ship_id in enabled_ship_ids:
+        if ship_id not in latest_data:
+            cursor.execute(
+                """UPDATE T_ship_info 
+                SET is_enabled = FALSE 
+                WHERE corporation_id = %s 
+                  AND ship_id = %s;""",
+                [cid, ship_id]
+            )
+            logger.info(f"C_{cid} - Disable ship: {ship_id}")
+    cursor.execute(
+        """UPDATE T_ship_base 
+        SET name_version = %s, ship_count = %s 
+        WHERE id = %s;""",
+        [version, len(latest_data), cid]
+    )
 
 def write_node_data(cursor: Cursor, node_id: int, data: dict) -> None:
     """将单个子节点的 API 返回数据写入五张统计表
