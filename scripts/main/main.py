@@ -13,7 +13,7 @@ from pymysql import Connection
 from logger import logger
 from exception import write_exception
 from game_api import fetch_ship_data
-from network import fetch_database_meta, fetch_binary_file
+from network import fetch_node_status, fetch_database_meta, fetch_binary_file
 from ranking import clan_ranking, user_ranking
 from db_ops import (
     read_node_info,
@@ -68,6 +68,21 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
             continue
 
         base_url = f"http://{host}:{port}"
+
+        response = fetch_node_status(base_url, token)
+
+        if response is None or response.get("code") != 1000:
+            logger.error(f"Node {name} exception: {response}")
+            continue
+
+        data = response.get("data", {})
+        available = data.get('available', False)
+        services = data.get('services', {})
+        logger.info(
+            f"Node {name.upper().ljust(4)} — "
+            f"State: {available},  "
+            f"services: {services}"
+        )
 
         response = fetch_database_meta(base_url, token)
 

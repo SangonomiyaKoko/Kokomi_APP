@@ -153,7 +153,6 @@ def update_game_version(cursor: Cursor, cid: int, local: str, latest: str) -> No
     }.get(cid)
     cursor.execute(sql, [cid, name, latest])
 
-
 def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str):
     latest_data = {}
     existing_ship_ids, enabled_ship_ids = ship_info

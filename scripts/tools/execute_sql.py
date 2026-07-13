@@ -30,9 +30,6 @@ DB_CONFIG = {
 }
 
 sql = """
-ALTER TABLE T_ship_info ADD COLUMN ship_name VARCHAR(50) DEFAULT NULL after index_code;
-ALTER TABLE T_ship_info ADD COLUMN is_demo BOOLEAN DEFAULT FALSE after is_old;
-ALTER TABLE T_ship_name DROP COLUMN verify;
 """
 
 def main():

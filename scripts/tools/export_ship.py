@@ -70,9 +70,6 @@ def main():
                         writer.writerow(row)
 
                 logger.info(f'Exported: {csv_path}')
-    except Exception:
-        logger.exception("Execute failed, rolled back")
-        raise
     finally:
         conn.close()
 
