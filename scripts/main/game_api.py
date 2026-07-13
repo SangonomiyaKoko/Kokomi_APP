@@ -31,10 +31,6 @@ def fetch_ship_data(cid: int):
     try:
         if cid == 1:
             url = 'https://vortex.worldofwarships.asia/api/encyclopedia/en/vehicles/'
-            import json
-            fp = r'C:\Users\MaoYu\Downloads\wg.json'
-            with open(fp, "r", encoding="utf-8") as f:
-                return json.load(f).get('data', {})
         else:
             url = 'https://vortex.korabli.su/api/encyclopedia/en/vehicles/'
 

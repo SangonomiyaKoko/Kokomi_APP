@@ -76,6 +76,7 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
             continue
 
         data = response.get("data", {})
+        error = data.get('error', 0)
         version = data.get('version')
         user_meta = data.get("user", {})
         clan_meta = data.get("clan", {})
@@ -87,7 +88,8 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
             f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
             f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
             f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
-            f"version: {version}"
+            f"version: {version},  "
+            f"error: {error}"
         )
         api_response = None
         if node_id == 3:
@@ -126,19 +128,19 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
         f"clans: {total_clans}"
     )
 
-    # for index in ['clan', 'ship']:
-    #     for _, node_data in node_info.items():
-    #         name, host, port, token, is_available = node_data
+    for index in ['clan', 'ship']:
+        for _, node_data in node_info.items():
+            name, host, port, token, is_available = node_data
 
-    #         if not is_available:
-    #             logger.info(f"Node {name.upper()} is marked unavailable")
-    #             continue
+            if not is_available:
+                logger.info(f"Node {name.upper()} is marked unavailable")
+                continue
 
-    #         base_url = f"http://{host}:{port}"
-    #         fetch_binary_file(base_url, token, index, name)
+            base_url = f"http://{host}:{port}"
+            fetch_binary_file(base_url, token, index, name)
 
-    # clan_ranking(redis_client)
-    # user_ranking(redis_client)
+    clan_ranking(redis_client)
+    user_ranking(redis_client)
 
 def main():
     """主调度循环
