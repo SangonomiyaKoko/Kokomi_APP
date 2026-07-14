@@ -1,3 +1,5 @@
+import json
+import hashlib
 import msgpack
 from datetime import datetime, timezone
 
@@ -28,3 +30,22 @@ def load_msgpack_to_dict(file_path: str) -> dict:
     with open(file_path, 'rb') as f:
         data = msgpack.unpack(f, raw=False)
     return data
+
+def generate_ship_hash(data_dict: dict) -> str:
+        sorted_items = sorted(data_dict.items())  # [(ship_id, [data...]), ...]
+        
+        serializable_data = []
+        for ship_id, ship_data in sorted_items:
+            serializable_data.append({
+                "id": ship_id,
+                "data": ship_data
+            })
+        json_str = json.dumps(
+            serializable_data,
+            sort_keys=True,
+            ensure_ascii=True,
+            separators=(',', ':')
+        )
+        
+        hash_obj = hashlib.sha256(json_str.encode('utf-8'))
+        return hash_obj.hexdigest()

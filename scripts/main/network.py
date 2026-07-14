@@ -14,6 +14,14 @@ def fetch_data(url: str, header: dict):
         return resp.json()
     resp.raise_for_status()
 
+def post_data(url: str, header: dict, json: dict):
+    """发送 GET 请求并解析 JSON 响应"""
+    resp = requests.post(url, headers=header, json=json)
+
+    if resp.status_code == 200:
+        return resp.json()
+    resp.raise_for_status()
+
 def fetch_binary_file(base_url: str, token: str, index: str, region: str):
     """
     从 GET 接口下载二进制文件并保存到本地
@@ -91,6 +99,26 @@ def fetch_database_meta(base_url: str, token: str):
         # http://127.0.0.1:8000/api/maintenance/database/meta/
         url = f'{base_url}/api/maintenance/database/meta/'
         return fetch_data(url, headers)
+    except Exception as e:
+        error_name = type(e).__name__
+        logger.error(f"Fetch database meta failed: {error_name}")
+        write_exception(
+            error_type="NetworkError",
+            error_name=error_name,
+            error_info=traceback.format_exc()
+        )
+        return
+    
+def post_ship_data(base_url: str, token: str, payload: dict):
+    """获取节点数据库数据"""
+    try:
+        headers = {
+            "Content-Type": "application/json",
+            'Access-Token': token
+        }
+        # http://127.0.0.1:8000/api/maintenance/ship/refresh/
+        url = f'{base_url}/api/maintenance/ship/refresh/'
+        return post_data(url, headers, payload)
     except Exception as e:
         error_name = type(e).__name__
         logger.error(f"Fetch database meta failed: {error_name}")

@@ -1,5 +1,7 @@
 
 import os
+import json
+import hashlib
 import logging
 import pymysql
 import requests
@@ -111,6 +113,16 @@ def fetch_ship_data(cid: int):
         error_name = type(e).__name__
         logger.warning(f"Fetch ship data failed: {error_name}")
 
+def read_name_hash(cursor: Cursor, cid: int):
+    sql = """
+        SELECT name_hash 
+        FROM T_ship_base 
+        WHERE id = %s;
+    """
+    cursor.execute(sql, [cid])
+    data = cursor.fetchone()
+    return data[0]
+
 def read_ship_info(cursor: Cursor, cid: int):
     sql = """
         SELECT 
@@ -142,7 +154,27 @@ def read_game_version(cursor: Cursor, cid: int):
     data = cursor.fetchone()
     return data[0]
 
-def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str):
+def generate_ship_hash(data_dict: dict) -> str:
+    sorted_items = sorted(data_dict.items())  # [(ship_id, [data...]), ...]
+    
+    serializable_data = []
+    for ship_id, ship_data in sorted_items:
+        serializable_data.append({
+            "id": ship_id,
+            "data": ship_data
+        })
+    json_str = json.dumps(
+        serializable_data,
+        sort_keys=True,
+        ensure_ascii=True,
+        separators=(',', ':')
+    )
+    
+    hash_obj = hashlib.sha256(json_str.encode('utf-8'))
+    return hash_obj.hexdigest()
+
+def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str, old_hash: str):
+    hash_data = {}
     latest_data = {}
     existing_ship_ids, enabled_ship_ids = ship_info
 
@@ -184,6 +216,25 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
             'ja': loc.get('shortmark', {}).get('ja', default_name),
             'ru': loc.get('shortmark', {}).get('ru', default_name)
         }
+
+        if not is_demo:
+            hash_data[int(ship_id)] = [
+                ship_data['level'],
+                TYPE_MAP.get(ship_tags[0], 1),
+                NATION_MAP.get(ship_data['nation'], 1),
+                1 if "uiPremium" in ship_tags else 0,
+                1 if "uiSpecial" in ship_tags else 0,
+                prefix,
+                name
+            ]
+
+    ship_hash = generate_ship_hash(hash_data)
+
+    logger.info(f'Ship hash: {ship_hash}')
+
+    if old_hash == ship_hash:
+        logger.info('No changed')
+        return
 
     changed_rows = [0] * 3
     for ship_id, ship in latest_data.items():
@@ -240,9 +291,9 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
 
     cursor.execute(
         """UPDATE T_ship_base 
-        SET name_version = %s, ship_count = %s, updated_at = NOW() 
+        SET name_version = %s, name_hash = %s, ship_count = %s, updated_at = NOW() 
         WHERE id = %s;""",
-        [version, len(latest_data), cid]
+        [version, ship_hash, len(latest_data), cid]
     )
     logger.info(f'Updated: {changed_rows}')
 
@@ -257,9 +308,10 @@ def main(cid: int):
         conn = pymysql.connect(**DB_CONFIG)
         try:
             with conn.cursor() as cursor:
+                name_hash = read_name_hash(cursor, cid)
                 ship_info = read_ship_info(cursor, cid)
                 version = read_game_version(cursor, cid)
-                refresh_ship_name(cursor, cid, api_response, ship_info, version)
+                refresh_ship_name(cursor, cid, api_response, ship_info, version, name_hash)
             conn.commit()
         except Exception:
             logger.exception("Execute failed, rolled back")

@@ -30,42 +30,6 @@ DB_CONFIG = {
     'autocommit': False
 }
 
-# 类型映射（来自 D_ship_type）
-TYPE_MAP = {
-    'AirCarrier': 1,
-    'Battleship': 2,
-    'Cruiser': 3,
-    'Destroyer': 4,
-    'Submarine': 5
-}
-
-# 国家映射（来自 D_ship_nation）
-NATION_MAP = {
-    'usa': 1,
-    'japan': 2,
-    'germany': 3,
-    'uk': 4,
-    'ussr': 5,
-    'france': 6,
-    'italy': 7,
-    'pan_asia': 8,
-    'europe': 9,
-    'netherlands': 10,
-    'commonwealth': 11,
-    'pan_america': 12,
-    'spain': 13
-}
-
-# 稀有度映射（来自 D_ship_rarity）
-RARITY_MAP = {
-    '': None,
-    'Common': 1,
-    'Uncommon': 2,
-    'Rare': 3,
-    'Epic': 4,
-    'Legendary': 5
-}
-
 def parse_ship_row(row: dict) -> dict:
     """将 CSV 行解析为用于插入的船只参数字典"""
     ship_id = int(row['ship_id'])
@@ -73,20 +37,20 @@ def parse_ship_row(row: dict) -> dict:
         'ship_id': ship_id,
         'is_old': bool(int(row.get('is_old', 0))),
         'tier': int(row['tier']),
-        'type_id': TYPE_MAP.get(row['type_id'], 1),
-        'nation_id': NATION_MAP.get(row['nation_id'], 1),
-        'rarity_id': RARITY_MAP.get(row.get('rarity_id', '')),
+        'type_id': int(row['type_id']),
+        'nation_id': int(row['nation_id']),
+        'rarity_id': row.get('rarity_id'),
         'premium': bool(int(row.get('premium', 0))),
         'special': bool(int(row.get('special', 0))),
         'index': row.get('index'),
         'name': row.get('default'),
-        'zh_cn': row.get('zh_cn', ''),
-        'zh_sg': row.get('zh_sg', ''),
-        'zh_tw': row.get('zh_tw', ''),
-        'en_short': row.get('en_short', ''),
-        'en_full': row.get('en_full', ''),
-        'ja': row.get('ja', ''),
-        'ru': row.get('ru', '')
+        'zh_cn': row.get('zh_cn'),
+        'zh_sg': row.get('zh_sg'),
+        'zh_tw': row.get('zh_tw'),
+        'en_short': row.get('en_short'),
+        'en_full': row.get('en_full'),
+        'ja': row.get('ja'),
+        'ru': row.get('ru')
     }
 
 
@@ -143,7 +107,7 @@ def main():
                         VALUES
                         (%s, %s, TRUE, %s, FALSE, %s, %s, %s, %s, %s, %s, %s, %s);""",
                     [cid, ship['ship_id'], ship['is_old'], ship['tier'],
-                        ship['type_id'], ship['nation_id'], ship['rarity_id'],
+                        ship['type_id'], ship['nation_id'], ship['rarity_id'] if ship['rarity_id'] != '' else None,
                         ship['premium'], ship['special'], ship['index'], ship['name']]
                 )
                 cursor.execute(

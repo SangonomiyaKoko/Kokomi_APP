@@ -13,17 +13,19 @@ from pymysql import Connection
 from logger import logger
 from exception import write_exception
 from game_api import fetch_ship_data
-from network import fetch_node_status, fetch_database_meta, fetch_binary_file
+from network import fetch_node_status, fetch_database_meta, fetch_binary_file, post_ship_data
 from ranking import clan_ranking, user_ranking
 from db_ops import (
     read_node_info,
     read_name_version,
     read_game_version, 
     read_ship_info,
+    read_ship_hash,
     update_game_version,
     refresh_ship_name,
     write_node_data
 )
+from utils import generate_ship_hash
 from settings import (
     CLIENT_NAME,
     REFRESH_INTERVAL,
@@ -47,6 +49,7 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
             game_version = read_game_version(cursor)
             name_version = read_name_version(cursor)
             ship_info = read_ship_info(cursor)
+            ship_hash = read_ship_hash(cursor)
     except Exception as e:
         error_name = type(e).__name__
         logger.error(f"Failed to read node info: {error_name}")
@@ -57,8 +60,16 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
         )
         return
     
+    logger.info(f'Local version: {game_version}')
+    wg_ship_hash = generate_ship_hash(ship_hash[1])
+    logger.info(f'Ship name 1: {name_version[1]} - {len(ship_info[1][1])} - {wg_ship_hash}')
+    lesta_ship_hash = generate_ship_hash(ship_hash[2])
+    logger.info(f'Ship name 2: {name_version[2]} - {len(ship_info[2][1])} - {lesta_ship_hash}')
+    
     total_users = 0
     total_clans = 0
+    total_error = 0
+    latest_version = {1: None, 2: None}
 
     for node_id, node_data in node_info.items():
         name, host, port, token, is_available = node_data
@@ -77,12 +88,7 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
 
         data = response.get("data", {})
         available = data.get('available', False)
-        services = data.get('services', {})
-        logger.info(
-            f"Node {name.upper().ljust(4)} — "
-            f"State: {available},  "
-            f"services: {services}"
-        )
+        name_hash = data.get('name_hash')
 
         response = fetch_database_meta(base_url, token)
 
@@ -95,37 +101,27 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
         version = data.get('version')
         user_meta = data.get("user", {})
         clan_meta = data.get("clan", {})
-        cache_meta = data.get("cache", {})
         total_users += user_meta.get('total', 0)
         total_clans += clan_meta.get('total', 0)
+        total_error += error
         logger.info(
             f"Node {name.upper().ljust(4)} — "
+            f"State: {available},  "
             f"users: {str(user_meta.get('total', 0)).rjust(7)},  "
             f"clans: {str(clan_meta.get('total', 0)).rjust(6)},  "
-            f"cached: {str(cache_meta.get('users', 0)).rjust(7)},  " 
             f"version: {version},  "
             f"error: {error}"
         )
-        api_response = None
+
+        # 记录最新 Version 字段
         if node_id == 3:
-            if name_version[1] is None or name_version[1] != version:
-                api_response = fetch_ship_data(1)
+            latest_version[1] = version
         elif node_id == 4:
-            if name_version[2] is None or name_version[2] != version:
-                api_response = fetch_ship_data(2)
+            latest_version[2] = version
 
         try:
             with mysql_connection.cursor() as cursor:
                 write_node_data(cursor, node_id, data)
-                if node_id == 3:
-                    update_game_version(cursor, 1, game_version.get(1), version)
-                    if api_response:
-                        refresh_ship_name(cursor, 1, api_response, ship_info[1], version)
-                elif node_id == 4:
-                    update_game_version(cursor, 2, game_version.get(2), version)
-                    if api_response:
-                        refresh_ship_name(cursor, 2, api_response, ship_info[2], version)
-
             mysql_connection.commit()
         except Exception as e:
             mysql_connection.rollback()
@@ -136,23 +132,69 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
                 error_name=error_name,
                 error_info=traceback.format_exc(),
             )
-    
+
+        # 下载排行榜文件
+        if available:
+            for index in ['clan', 'ship']:
+                fetch_binary_file(base_url, token, index, name)
+
+        # 更新子服务器的船只名称字段
+        if node_id == 4:
+            if name_hash and lesta_ship_hash and name_hash != lesta_ship_hash:
+                logger.info(f'Node {name.upper().ljust(4)} — {name_hash} -> {lesta_ship_hash}')
+                result = post_ship_data(base_url, token, ship_hash[2])
+                logger.info(f'Response: {result}')
+        else:
+            if name_hash and wg_ship_hash and name_hash != wg_ship_hash:
+                logger.info(f'Node {name.upper().ljust(4)} — {name_hash} -> {wg_ship_hash}')
+                result = post_ship_data(base_url, token, ship_hash[1])
+                logger.info(f'Response: {result}')
+
     logger.info(
-        f"Summary   — "
+        f"Summary   — /             "
         f"users: {total_users},  "
-        f"clans: {total_clans}"
+        f"clans: {total_clans},  "
+        "/               "
+        f"error: {total_error}"
     )
 
-    for index in ['clan', 'ship']:
-        for _, node_data in node_info.items():
-            name, host, port, token, is_available = node_data
 
-            if not is_available:
-                logger.info(f"Node {name.upper()} is marked unavailable")
-                continue
+    try:
+        with mysql_connection.cursor() as cursor:
+            # 更新 WG 运营服务器的船只信息
+            if (
+                name_version.get(1) is None or 
+                latest_version.get(1) is None or 
+                str(name_version[1]) != str(latest_version[1])
+            ):
+                logger.info(f"WG Ship Version: {name_version[1]} -> {latest_version[1]}")
+                wg_response = fetch_ship_data(1)
+                update_game_version(cursor, 1, game_version.get(1), latest_version[1])
+                if wg_response:
+                    refresh_ship_name(cursor, 1, wg_response, ship_info[1], latest_version[1])
 
-            base_url = f"http://{host}:{port}"
-            fetch_binary_file(base_url, token, index, name)
+            # 更新 Lesta 运营服务器的船只信息
+            if (
+                name_version.get(2) is None or 
+                latest_version.get(2) is None or 
+                str(name_version[2]) != str(latest_version[2])
+            ):
+                logger.info(f"Lesta Ship Version: {name_version[2]} -> {latest_version[2]}")
+                lesta_response = fetch_ship_data(2)
+                update_game_version(cursor, 2, game_version.get(2), latest_version[2])
+                if wg_response:
+                    refresh_ship_name(cursor, 2, lesta_response, ship_info[2], latest_version[2])
+
+        mysql_connection.commit()
+    except Exception as e:
+        mysql_connection.rollback()
+        error_name = type(e).__name__
+        logger.error(f"Database operation exception: {error_name}")
+        write_exception(
+            error_type="DatabaseError",
+            error_name=error_name,
+            error_info=traceback.format_exc(),
+        )
 
     clan_ranking(redis_client)
     user_ranking(redis_client)

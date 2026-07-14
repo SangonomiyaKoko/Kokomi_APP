@@ -197,7 +197,7 @@ def user_ranking(redis_client: Redis):
             key = f'ranking:ship:{region}:{ship_id}'
             redis_client.set(key, json.dumps(cache_data))
             key = f'ship_archieve:{now_date}:{region}:{ship_id}'
-            redis_client.set(key, json.dumps(archieve_data))
+            redis_client.set(key, json.dumps(archieve_data), ex=31*86400)
 
             if region == 'ru':
                 continue

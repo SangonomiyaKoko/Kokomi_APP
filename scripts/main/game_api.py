@@ -33,7 +33,8 @@ def fetch_ship_data(cid: int):
             url = 'https://vortex.worldofwarships.asia/api/encyclopedia/en/vehicles/'
         else:
             url = 'https://vortex.korabli.su/api/encyclopedia/en/vehicles/'
-
+            
+        logger.info(f'GET {url}')
         response = fetch_data(url)
 
         if type(response) == str:
