@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 from pathlib import Path
 
@@ -12,11 +11,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(os.getcwd())
-
-file_path = ROOT_DIR / 'data/const/constants.json'
-with open(file_path, "r", encoding="utf-8") as f:
-    data = json.load(f)
-    SERVICE_LIST: list = data['SERVICE_LIST']
 
 def main():
     """删除所有错误日志文件"""
@@ -44,7 +38,7 @@ if __name__ == '__main__':
     """清理错误日志
 
     使用示例：
-    python tests/clear_logs.py
+    python scripts/tools/clear_logs.py
     """
     try:
         main()
