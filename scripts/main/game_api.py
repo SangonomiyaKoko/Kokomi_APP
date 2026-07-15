@@ -30,7 +30,7 @@ def fetch_ship_data(cid: int):
     """获取"""
     try:
         if cid == 1:
-            url = 'https://vortex.worldofwarships.asia/api/encyclopedia/en/vehicles/'
+            url = 'https://vortex.worldofwarships.com/api/encyclopedia/en/vehicles/'
         else:
             url = 'https://vortex.korabli.su/api/encyclopedia/en/vehicles/'
             

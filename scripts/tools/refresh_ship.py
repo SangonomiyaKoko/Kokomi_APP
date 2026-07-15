@@ -98,7 +98,7 @@ def fetch_ship_data(cid: int):
     """获取"""
     try:
         if cid == 1:
-            url = 'https://vortex.worldofwarships.asia/api/encyclopedia/en/vehicles/'
+            url = 'https://vortex.worldofwarships.com/api/encyclopedia/en/vehicles/'
         else:
             url = 'https://vortex.korabli.su/api/encyclopedia/en/vehicles/'
         logger.info(f'GET {url}')
@@ -112,16 +112,6 @@ def fetch_ship_data(cid: int):
     except Exception as e:
         error_name = type(e).__name__
         logger.warning(f"Fetch ship data failed: {error_name}")
-
-def read_name_hash(cursor: Cursor, cid: int):
-    sql = """
-        SELECT name_hash 
-        FROM T_ship_base 
-        WHERE id = %s;
-    """
-    cursor.execute(sql, [cid])
-    data = cursor.fetchone()
-    return data[0]
 
 def read_ship_info(cursor: Cursor, cid: int):
     sql = """
@@ -173,7 +163,7 @@ def generate_ship_hash(data_dict: dict) -> str:
     hash_obj = hashlib.sha256(json_str.encode('utf-8'))
     return hash_obj.hexdigest()
 
-def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str, old_hash: str):
+def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str):
     hash_data = {}
     latest_data = {}
     existing_ship_ids, enabled_ship_ids = ship_info
@@ -232,10 +222,6 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
 
     logger.info(f'Ship hash: {ship_hash}')
 
-    if old_hash == ship_hash:
-        logger.info('No changed')
-        return
-
     changed_rows = [0] * 3
     for ship_id, ship in latest_data.items():
         if ship_id not in existing_ship_ids:
@@ -291,9 +277,9 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
 
     cursor.execute(
         """UPDATE T_ship_base 
-        SET name_version = %s, name_hash = %s, ship_count = %s, updated_at = NOW() 
+        SET name_version = %s, ship_count = %s, updated_at = NOW() 
         WHERE id = %s;""",
-        [version, ship_hash, len(latest_data), cid]
+        [version, len(latest_data), cid]
     )
     logger.info(f'Updated: {changed_rows}')
 
@@ -308,10 +294,9 @@ def main(cid: int):
         conn = pymysql.connect(**DB_CONFIG)
         try:
             with conn.cursor() as cursor:
-                name_hash = read_name_hash(cursor, cid)
                 ship_info = read_ship_info(cursor, cid)
                 version = read_game_version(cursor, cid)
-                refresh_ship_name(cursor, cid, api_response, ship_info, version, name_hash)
+                refresh_ship_name(cursor, cid, api_response, ship_info, version)
             conn.commit()
         except Exception:
             logger.exception("Execute failed, rolled back")
