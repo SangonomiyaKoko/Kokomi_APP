@@ -277,20 +277,20 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
         else:
             cursor.execute(
                 """UPDATE T_ship_info 
-                SET is_demo = %s, premium = %s, special = %s 
+                SET is_demo = %s, premium = %s, special = %s, index_code = %s, ship_name = %s
                 WHERE corporation_id = %s 
                   AND ship_id = %s;""",
-                [ship['premium'], ship['special'], cid, ship_id]
+                [ship['is_demo'], ship['premium'], ship['special'], ship['index'], ship['name'], cid, ship_id]
             )
 
     for ship_id in enabled_ship_ids:
         if ship_id not in latest_data:
             cursor.execute(
                 """UPDATE T_ship_info 
-                SET is_demo = %s, premium = %s, special = %s, index_code = %s, ship_name = %s
+                SET is_enabled = FALSE 
                 WHERE corporation_id = %s 
                   AND ship_id = %s;""",
-                [ship['is_demo'], ship['premium'], ship['special'], ship['index'], ship['name'], cid, ship_id]
+                [cid, ship_id]
             )
             logger.info(f"C_{cid} - Disable ship: {ship_id}")
     cursor.execute(
