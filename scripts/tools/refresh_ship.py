@@ -142,29 +142,9 @@ def read_game_version(cursor: Cursor, cid: int):
     """
     cursor.execute(sql, [cid])
     data = cursor.fetchone()
-    return data[0]
-
-def generate_ship_hash(data_dict: dict) -> str:
-    sorted_items = sorted(data_dict.items())  # [(ship_id, [data...]), ...]
-    
-    serializable_data = []
-    for ship_id, ship_data in sorted_items:
-        serializable_data.append({
-            "id": ship_id,
-            "data": ship_data
-        })
-    json_str = json.dumps(
-        serializable_data,
-        sort_keys=True,
-        ensure_ascii=True,
-        separators=(',', ':')
-    )
-    
-    hash_obj = hashlib.sha256(json_str.encode('utf-8'))
-    return hash_obj.hexdigest()
+    return data
 
 def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list, version: str):
-    hash_data = {}
     latest_data = {}
     existing_ship_ids, enabled_ship_ids = ship_info
 
@@ -206,21 +186,6 @@ def refresh_ship_name(cursor: Cursor, cid: int, response: dict, ship_info: list,
             'ja': loc.get('shortmark', {}).get('ja', default_name),
             'ru': loc.get('shortmark', {}).get('ru', default_name)
         }
-
-        if not is_demo:
-            hash_data[int(ship_id)] = [
-                ship_data['level'],
-                TYPE_MAP.get(ship_tags[0], 1),
-                NATION_MAP.get(ship_data['nation'], 1),
-                1 if "uiPremium" in ship_tags else 0,
-                1 if "uiSpecial" in ship_tags else 0,
-                prefix,
-                name
-            ]
-
-    ship_hash = generate_ship_hash(hash_data)
-
-    logger.info(f'Ship hash: {ship_hash}')
 
     changed_rows = [0] * 3
     for ship_id, ship in latest_data.items():

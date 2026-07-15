@@ -129,14 +129,14 @@ def main():
                     [cid, ship['ship_id']]
                 )
                 
-
-            cursor.execute(
-                """UPDATE T_ship_base
-                   SET name_version = %s,
-                       ship_count   = %s
-                   WHERE id = %s""",
-                [game_version, len(csv_ships), cid]
-            )
+            if game_version:
+                cursor.execute(
+                    """UPDATE T_ship_base
+                    SET name_version = %s,
+                        ship_count   = %s
+                    WHERE id = %s""",
+                    [game_version, len(csv_ships), cid]
+                )
             conn.commit()
         except Exception:
             conn.rollback()

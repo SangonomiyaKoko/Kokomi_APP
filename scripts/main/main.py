@@ -62,9 +62,9 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
     
     logger.info(f'Local version: {game_version}')
     wg_ship_hash = generate_ship_hash(ship_hash[1])
-    logger.info(f'Ship name 1: {name_version[1]} - {len(ship_info[1][1])} - {wg_ship_hash}')
+    logger.info(f'Ship name 1: {name_version[1]} - {len(ship_info[1][1])} - ({len(ship_hash[1])}){wg_ship_hash}')
     lesta_ship_hash = generate_ship_hash(ship_hash[2])
-    logger.info(f'Ship name 2: {name_version[2]} - {len(ship_info[2][1])} - {lesta_ship_hash}')
+    logger.info(f'Ship name 2: {name_version[2]} - {len(ship_info[2][1])} - ({len(ship_hash[2])}){lesta_ship_hash}')
     
     total_users = 0
     total_clans = 0
@@ -167,9 +167,9 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
                 latest_version.get(1) is None or 
                 str(name_version[1]) != str(latest_version[1])
             ):
+                update_game_version(cursor, 1, game_version.get(1), latest_version[1])
                 logger.info(f"WG Ship Version: {name_version[1]} -> {latest_version[1]}")
                 wg_response = fetch_ship_data(1)
-                update_game_version(cursor, 1, game_version.get(1), latest_version[1])
                 if wg_response:
                     refresh_ship_name(cursor, 1, wg_response, ship_info[1], latest_version[1])
 
@@ -179,10 +179,10 @@ def worker(mysql_connection: Connection, redis_client: Redis) -> None:
                 latest_version.get(2) is None or 
                 str(name_version[2]) != str(latest_version[2])
             ):
+                update_game_version(cursor, 2, game_version.get(2), latest_version[2])
                 logger.info(f"Lesta Ship Version: {name_version[2]} -> {latest_version[2]}")
                 lesta_response = fetch_ship_data(2)
-                update_game_version(cursor, 2, game_version.get(2), latest_version[2])
-                if wg_response:
+                if lesta_response:
                     refresh_ship_name(cursor, 2, lesta_response, ship_info[2], latest_version[2])
 
         mysql_connection.commit()

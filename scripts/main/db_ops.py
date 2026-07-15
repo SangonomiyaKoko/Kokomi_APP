@@ -113,9 +113,6 @@ def read_ship_hash(cursor: Cursor) -> Dict[int, str | None]:
             SELECT 
                 ship_id,
                 is_old, 
-                tier,
-                type_id,
-                nation_id,
                 rarity_id, 
                 premium,
                 special,
@@ -124,7 +121,7 @@ def read_ship_hash(cursor: Cursor) -> Dict[int, str | None]:
             FROM T_ship_info 
             WHERE corporation_id = %s 
               AND is_enabled = 1 
-              AND is_demo = 0
+              AND is_demo = 0 
             ORDER BY ship_id ASC;
         """
         cursor.execute(sql, [cid])
@@ -132,21 +129,7 @@ def read_ship_hash(cursor: Cursor) -> Dict[int, str | None]:
             
         hash_data = {}
         for row in rows:
-            ship_id = int(row[0])
-            is_old = 1 if row[1] else 0
-            tier = row[2]
-            type_id = row[3]
-            nation_id = row[4]
-            rarity_id = row[5]
-            premium = 1 if row[6] else 0
-            special = 1 if row[7] else 0
-            prefix = row[8]  # index_code
-            name = row[9]
-            
-            hash_data[ship_id] = [
-                is_old, tier, type_id, nation_id, rarity_id, 
-                premium, special, prefix, name
-            ]
+            hash_data[row[0]] = row[1:]
         result[cid] = hash_data
 
     return result
@@ -165,7 +148,7 @@ def read_ship_info(cursor: Cursor) -> Dict[int, str | None]:
         """
         cursor.execute(sql, [cid])
         data = cursor.fetchall()
-
+        print(data)
         existing_ship_ids = []
         enabled_ship_ids = []
         for ship in data:
