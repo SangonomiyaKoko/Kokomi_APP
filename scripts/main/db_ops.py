@@ -148,7 +148,6 @@ def read_ship_info(cursor: Cursor) -> Dict[int, str | None]:
         """
         cursor.execute(sql, [cid])
         data = cursor.fetchall()
-        print(data)
         existing_ship_ids = []
         enabled_ship_ids = []
         for ship in data:
